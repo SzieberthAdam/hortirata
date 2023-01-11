@@ -22,9 +22,10 @@
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 #endif
 
-#define N 5
-#define M 2
-#define A (N + 2*M)
+#define FIELDTYPECOUNT 5
+#define BOARDROWS 9
+#define BOARDCOLUMNS 9
+
 #define TILESIZE 64
 #define TILECENTERSIZE 50
 #define TILEUNDERLEVEL 9
@@ -53,7 +54,7 @@
 #define STATE_NEWLEVEL 0x80
 #define STATE_NEWLEVELWITHDRAW 0xC0
 
-#define MAXSIMHARVESTS N
+#define MAXSIMHARVESTS FIELDTYPECOUNT
 
 #define WX ((screenWidth - windowedScreenWidth) / 2)
 #define WY ((screenHeight - windowedScreenHeight) / 2)
@@ -61,7 +62,7 @@
 char str[1024];
 
 typedef struct __attribute__((__packed__, __scalar_storage_order__("big-endian"))) {
-    uint8_t board[A][A];
+    uint8_t board[BOARDROWS][BOARDCOLUMNS];
     uint32_t harvests;
 } HortirataData;
 
@@ -96,59 +97,59 @@ unsigned ffs(int n)
 }
 
 
-void setfields(uint8_t board[A][A], uint8_t *gamefields, uint8_t *randomfields)
+void setfields(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t *gamefields, uint8_t *randomfields)
 {
     *gamefields = 0;
     *randomfields = 0;
-    for (uint8_t row=0; row<A; row++)
+    for (uint8_t row=0; row<BOARDROWS; row++)
     {
-        for (uint8_t col=0; col<A; col++)
+        for (uint8_t col=0; col<BOARDCOLUMNS; col++)
         {
             uint8_t v = board[row][col];
-            if (v < N) *gamefields = *gamefields+1;
+            if (v < FIELDTYPECOUNT) *gamefields = *gamefields+1;
             else if (v==0x80) *randomfields = *randomfields+1;
         }
     }
 }
 
 
-bool load(const char *fileName, HortirataData *data, uint8_t vcount[N], uint8_t *targetvcount)
+bool load(const char *fileName, HortirataData *data, uint8_t vcount[FIELDTYPECOUNT], uint8_t *targetvcount)
 {
     if (!FileExists(fileName)) return false;
     unsigned int filelength = GetFileLength(fileName);
-    if (filelength != A * A) return false;
+    if (filelength != BOARDROWS * BOARDCOLUMNS) return false;
     unsigned char* filedata = LoadFileData(fileName, &filelength);
     data->harvests = 0;
     memcpy(&data->board, filedata, filelength);
-    for (uint8_t v=0; v<N; v++) vcount[v] = 0;
+    for (uint8_t v=0; v<FIELDTYPECOUNT; v++) vcount[v] = 0;
     uint8_t gamefields = 0;
     uint8_t randomfields = 0;
-    for (uint8_t row=0; row<A; row++)
+    for (uint8_t row=0; row<BOARDROWS; row++)
     {
-        for (uint8_t col=0; col<A; col++)
+        for (uint8_t col=0; col<BOARDCOLUMNS; col++)
         {
             uint8_t v = data->board[row][col];
-            if (v < N) vcount[v]++;
+            if (v < FIELDTYPECOUNT) vcount[v]++;
         }
         setfields(data->board, &gamefields, &randomfields);
-        *targetvcount = (gamefields + randomfields) / N;
+        *targetvcount = (gamefields + randomfields) / FIELDTYPECOUNT;
     }
     UnloadFileData(filedata);
     return true;
 }
 
 
-void transform(uint8_t board[A][A], uint8_t vcount[N], uint8_t row, uint8_t col)
+void transform(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t vcount[FIELDTYPECOUNT], uint8_t row, uint8_t col)
 {
     uint8_t v = board[row][col];
-    for (uint8_t row1=((0 < row) ? row-1 : 0); row1<=((row < A-1) ? row+1 : A-1); row1++)
+    for (uint8_t row1=((0 < row) ? row-1 : 0); row1<=((row < BOARDROWS-1) ? row+1 : BOARDROWS-1); row1++)
     {
-        for (uint8_t col1=((0 < col) ? col-1 : 0); col1<=((col < A-1) ? col+1 : A-1); col1++)
+        for (uint8_t col1=((0 < col) ? col-1 : 0); col1<=((col < BOARDCOLUMNS-1) ? col+1 : BOARDCOLUMNS-1); col1++)
         {
             if ((row1==row) && (col1==col)) continue;
             uint8_t v0 = board[row1][col1];
             if (0x80 <= v0) continue;
-            uint8_t v1 = (v0 + v) % N;
+            uint8_t v1 = (v0 + v) % FIELDTYPECOUNT;
             board[row1][col1] = v1;
             vcount[v0]--;
             vcount[v1]++;
@@ -156,9 +157,9 @@ void transform(uint8_t board[A][A], uint8_t vcount[N], uint8_t row, uint8_t col)
     }
 }
 
-bool vcount_in_equilibrium(uint8_t vcount[N], uint8_t targetvcount)
+bool vcount_in_equilibrium(uint8_t vcount[FIELDTYPECOUNT], uint8_t targetvcount)
 {
-    for (uint8_t v=0; v<N; v++)
+    for (uint8_t v=0; v<FIELDTYPECOUNT; v++)
     {
         if (vcount[v] != targetvcount) return false;
     }
@@ -166,22 +167,22 @@ bool vcount_in_equilibrium(uint8_t vcount[N], uint8_t targetvcount)
 }
 
 
-bool simulate(uint8_t board[A][A], uint8_t vcount[N], uint8_t targetvcount, uint8_t harvests)
+bool simulate(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t vcount[FIELDTYPECOUNT], uint8_t targetvcount, uint8_t harvests)
 {
-    uint8_t simboard[A][A];
-    uint8_t simvcount[N];
+    uint8_t simboard[BOARDROWS][BOARDCOLUMNS];
+    uint8_t simvcount[FIELDTYPECOUNT];
 
     if (harvests == 0) return false;
 
-    for (uint8_t row=0; row<A; row++)
+    for (uint8_t row=0; row<BOARDROWS; row++)
     {
-        for (uint8_t col=0; col<A; col++)
+        for (uint8_t col=0; col<BOARDCOLUMNS; col++)
         {
             uint8_t v = board[row][col];
-            if (0 < v && v < N)
+            if (0 < v && v < FIELDTYPECOUNT)
             {
-                memcpy(&simboard, board, A*A);
-                memcpy(&simvcount, vcount, N);
+                memcpy(&simboard, board, BOARDROWS*BOARDCOLUMNS);
+                memcpy(&simvcount, vcount, FIELDTYPECOUNT);
                 transform(simboard, simvcount, row, col);
                 if (vcount_in_equilibrium(simvcount, targetvcount)) return true;
                 if ((1 < harvests) && simulate(simboard, simvcount, targetvcount, harvests-1)) return true;
@@ -192,7 +193,7 @@ bool simulate(uint8_t board[A][A], uint8_t vcount[N], uint8_t targetvcount, uint
 }
 
 
-void draw_board(HortirataData data, uint8_t vcount[N], uint8_t targetvcount, uint8_t eqharvests, uint8_t level, Rectangle viewport, Texture2D bg, Texture2D tiles)
+void draw_board(HortirataData data, uint8_t vcount[FIELDTYPECOUNT], uint8_t targetvcount, uint8_t eqharvests, uint8_t level, Rectangle viewport, Texture2D bg, Texture2D tiles)
 {
     DrawTexture(bg, viewport.x, viewport.y, WHITE);
     {
@@ -205,9 +206,9 @@ void draw_board(HortirataData data, uint8_t vcount[N], uint8_t targetvcount, uin
         int strwidth = MeasureText(str, 10);
         DrawText(str, viewport.x + (uint16_t)((viewport.width - strwidth)/2), viewport.y + 41, 10, COLOR_FOREGROUND);
     }
-    for (uint8_t row=0; row<A; row++)
+    for (uint8_t row=0; row<BOARDROWS; row++)
     {
-        for (uint8_t col=0; col<A; col++)
+        for (uint8_t col=0; col<BOARDCOLUMNS; col++)
         {
             uint8_t v = data.board[row][col];
             uint8_t i = (0 < vcount[v]) ? min(TILEUNDERLEVEL + TILEOVERLEVEL, TILEUNDERLEVEL + vcount[v] - targetvcount) : TILEUNDERLEVEL;
@@ -232,12 +233,12 @@ void draw_board(HortirataData data, uint8_t vcount[N], uint8_t targetvcount, uin
     else if (STATE_NEWLEVELWITHDRAW <= eqharvests) sprintf(str, "MOVE YOUR MOUSE!");
     else sprintf(str, "EQUILIBRIUM IN %d HARVEST%s", eqharvests, ((eqharvests==1) ? "" : "S"));
     int strwidth = MeasureText(str, 20);
-    DrawText(str, viewport.x + TILE_ORIGIN_X + viewport.width - strwidth - 73, viewport.y + TILE_ORIGIN_Y + TILESIZE * A + 55, 20, COLOR_FOREGROUND);
+    DrawText(str, viewport.x + TILE_ORIGIN_X + viewport.width - strwidth - 73, viewport.y + TILE_ORIGIN_Y + TILESIZE * BOARDROWS + 55, 20, COLOR_FOREGROUND);
 
 
     if (0 < data.harvests) sprintf(str, "%d HARVEST%s", data.harvests, ((data.harvests==1) ? "" : "S"));
     else sprintf(str, "LEVEL %d", level);
-    DrawText(str, viewport.x + TILE_ORIGIN_X + 9, viewport.y + TILE_ORIGIN_Y + TILESIZE * A + 55, 20, COLOR_FOREGROUND);
+    DrawText(str, viewport.x + TILE_ORIGIN_X + 9, viewport.y + TILE_ORIGIN_Y + TILESIZE * BOARDROWS + 55, 20, COLOR_FOREGROUND);
     //DrawRectangleLinesEx(viewport, 1, MAGENTA);
 }
 
@@ -247,7 +248,7 @@ int main(void)
     //SetTraceLogLevel(LOG_DEBUG);
 
     HortirataData data;
-    uint8_t vcount[N];
+    uint8_t vcount[FIELDTYPECOUNT];
     uint8_t targetvcount;
 
     uint8_t gamefields = 0;
@@ -321,7 +322,7 @@ int main(void)
             sprintf(str, "LEVEL = %d", level);
             TraceLog(LOG_DEBUG, str);
             TraceLog(LOG_DEBUG, "BOARD:");
-            for (uint8_t row=0; row<A; row++)
+            for (uint8_t row=0; row<BOARDROWS; row++)
             {
                 sprintf(str, "| %3d | %3d | %3d | %3d | %3d | %3d | %3d | %3d | %3d |", data.board[row][0], data.board[row][1], data.board[row][2], data.board[row][3], data.board[row][4], data.board[row][5], data.board[row][6], data.board[row][7], data.board[row][8]);
                 TraceLog(LOG_DEBUG, str);
@@ -350,20 +351,14 @@ int main(void)
 
             case SCENE_NEWGAME_DEFAULT:
             {
-                data.harvests = 0;
-                for (uint8_t v=0; v<N; v++) vcount[v] = 0;
-                for (uint8_t row=0; row<A; row++)
+                sprintf(str, "%s\\%s", GetApplicationDirectory(), "default.hortirata");
+                bool success = load(str, &data, vcount, &targetvcount);
+                if (success)
                 {
-                    for (uint8_t col=0; col<A; col++)
-                    {
-                        if (M <= row && row < A-M && M <= col && col < A-M) data.board[row][col] = 0x80 + 0;
-                        else data.board[row][col] = 0x80 + 1;
-                    }
+                    level = 0;
+                    scene = SCENE_NEWGAME;
                 }
-                targetvcount = 5;
-                scene = SCENE_NEWGAME;
-                eqharvests = 0;
-            } break;
+            }
 
             case SCENE_NEWGAME_LEVEL:
             {
@@ -396,16 +391,16 @@ int main(void)
                 {
                     uint64_t randomvalue = __rdtsc();
                     uint8_t row, col, v;
-                    for (row=0; row<A; ++row)
+                    for (row=0; row<BOARDROWS; ++row)
                     {
-                        for (col=0; col<A; ++col)
+                        for (col=0; col<BOARDCOLUMNS; ++col)
                         {
                             v = data.board[row][col];
                             if (v == 0x80) break;
                         }
                         if (v == 0x80) break;
                     }
-                    uint8_t remgamefields = targetvcount * N - gamefields;
+                    uint8_t remgamefields = targetvcount * FIELDTYPECOUNT - gamefields;
                     uint8_t remdummyfields = randomfields - remgamefields;
                     //sprintf(str, "TARGET VCOUNT: %d ; valid: %d (%d), random: %d (%d)", targetvcount, gamefields, remgamefields, randomfields, remdummyfields);
                     //TraceLog(LOG_DEBUG, str);
@@ -416,7 +411,7 @@ int main(void)
                         uint8_t randmask = (randsize * 2 - 1) << 3;
                         uint8_t v1 = (randomvalue & randmask) >> 3;
                         uint8_t v = randomvalue & 0x07;
-                        if (v < N)
+                        if (v < FIELDTYPECOUNT)
                         {
                             if (v1 < remdummyfields)
                             {
@@ -437,7 +432,7 @@ int main(void)
                     if (0 < remgamefields && 0 == remdummyfields)
                     {
                         uint8_t v = randomvalue & 0x07;
-                        if (v < N)
+                        if (v < FIELDTYPECOUNT)
                         {
                             data.board[row][col] = v;
                             vcount[v]++;
@@ -468,9 +463,9 @@ int main(void)
                 //TraceLog(LOG_DEBUG, str);
                 bool validloc = \
                 (
-                        (row < A && col < A)
+                        (row < BOARDROWS && col < BOARDCOLUMNS)
                         &&
-                        (v < N)
+                        (v < FIELDTYPECOUNT)
                         &&
                         (lbound <= rowmod && rowmod <= ubound && lbound <= colmod && colmod <= ubound)
                 );
@@ -556,7 +551,7 @@ int main(void)
         if (IsKeyPressed(KEY_S))
         {
             sprintf(str, "%s\\%s", GetApplicationDirectory(), "puzzle.hortirata");
-            SaveFileData(str, data.board, A * A);
+            SaveFileData(str, data.board, BOARDROWS * BOARDCOLUMNS);
         }
 
     }

@@ -62,7 +62,6 @@ char str[1024];
 
 typedef struct __attribute__((__packed__, __scalar_storage_order__("big-endian"))) {
     uint8_t board[A][A];
-    uint8_t lastpick[2];
     uint32_t harvests;
 } HortirataData;
 
@@ -119,7 +118,6 @@ bool load(const char *fileName, HortirataData *data, uint8_t vcount[N], uint8_t 
     unsigned int filelength = GetFileLength(fileName);
     if (filelength != A * A) return false;
     unsigned char* filedata = LoadFileData(fileName, &filelength);
-    memset(data->lastpick, 255, 2);
     data->harvests = 0;
     memcpy(&data->board, filedata, filelength);
     for (uint8_t v=0; v<N; v++) vcount[v] = 0;
@@ -168,7 +166,7 @@ bool vcount_in_equilibrium(uint8_t vcount[N], uint8_t targetvcount)
 }
 
 
-bool simulate(uint8_t board[A][A], uint8_t vcount[N], uint8_t targetvcount, uint8_t harvests, uint8_t lastpick[2])
+bool simulate(uint8_t board[A][A], uint8_t vcount[N], uint8_t targetvcount, uint8_t harvests)
 {
     uint8_t simboard[A][A];
     uint8_t simvcount[N];
@@ -180,13 +178,13 @@ bool simulate(uint8_t board[A][A], uint8_t vcount[N], uint8_t targetvcount, uint
         for (uint8_t col=0; col<A; col++)
         {
             uint8_t v = board[row][col];
-            if (0 < v && v < N && !(lastpick[0] == row && lastpick[1] == col))
+            if (0 < v && v < N)
             {
                 memcpy(&simboard, board, A*A);
                 memcpy(&simvcount, vcount, N);
                 transform(simboard, simvcount, row, col);
                 if (vcount_in_equilibrium(simvcount, targetvcount)) return true;
-                if ((1 < harvests) && simulate(simboard, simvcount, targetvcount, harvests-1, ((uint8_t[2]){row, col}))) return true;
+                if ((1 < harvests) && simulate(simboard, simvcount, targetvcount, harvests-1)) return true;
             }
         }
     }
@@ -217,11 +215,6 @@ void draw_board(HortirataData data, uint8_t vcount[N], uint8_t targetvcount, uin
             if (0x80 <= v)
             {
                 DrawTexturePro(tiles, ((Rectangle){(v - 0x80) * TILESIZE, 0, TILESIZE, TILESIZE}), dest, ((Vector2){0, 0}), 0, WHITE);
-            }
-            else if (data.lastpick[0] == row && data.lastpick[1] == col)
-            {
-                DrawTexturePro(tiles, ((Rectangle){i * TILESIZE, (1+v) * TILESIZE, TILESIZE, TILESIZE}), dest, ((Vector2){0, 0}), 0, WHITE);
-                DrawTexturePro(tiles, ((Rectangle){TILE_LOCK_COL * TILESIZE, 0, TILESIZE, TILESIZE}), dest, ((Vector2){0, 0}), 0, WHITE);
             }
             else if (v == 0)
             {
@@ -357,7 +350,6 @@ int main(void)
 
             case SCENE_NEWGAME_DEFAULT:
             {
-                memset(data.lastpick, 255, 2);
                 data.harvests = 0;
                 for (uint8_t v=0; v<N; v++) vcount[v] = 0;
                 for (uint8_t row=0; row<A; row++)
@@ -478,17 +470,13 @@ int main(void)
                 (
                         (row < A && col < A)
                         &&
-                        (0 < v && v < N)
+                        (v < N)
                         &&
                         (lbound <= rowmod && rowmod <= ubound && lbound <= colmod && colmod <= ubound)
-                        &&
-                        !(data.lastpick[0] == row && data.lastpick[1] == col)
                 );
                 if (validloc && (currentGesture != lastGesture && currentGesture == GESTURE_TAP))
                 {
                     transform(data.board, vcount, row, col);
-                    data.lastpick[0] = row;
-                    data.lastpick[1] = col;
                     data.harvests++;
                     eqharvests = 0;
                 }
@@ -499,7 +487,7 @@ int main(void)
                     eqharvests = STATE_NEWLEVEL + level;
                     for (eqharvests=1; eqharvests <= MAXSIMHARVESTS; eqharvests++)
                     {
-                        equilibrium = simulate(data.board, vcount, targetvcount, eqharvests, data.lastpick);
+                        equilibrium = simulate(data.board, vcount, targetvcount, eqharvests);
                         if (equilibrium) break;
                     }
                     if (!equilibrium) eqharvests = STATE_MANYHARVESTS;

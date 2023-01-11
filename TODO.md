@@ -1,7 +1,8 @@
 ﻿TODO
 ====
-1. Remove last pick restriciton
 1. Code rework
+    * remove A, M, N definitions
+    * scene
 1. Change screen to 19x9 & remove background
 1. Optimize solver
 1. Give suggestion

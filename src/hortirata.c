@@ -22,7 +22,7 @@
 
 #define FIELDTYPECOUNT 5
 #define BOARDROWS 9
-#define BOARDCOLUMNS 9
+#define BOARDCOLUMNS 19
 
 #define TILESIZE 64
 #define TILECENTERSIZE 50
@@ -42,13 +42,15 @@
 
 
 enum HortirataFieldType {
-    Grass = 0,
-    Grain = 1,
-    Lettuce = 2,
-    Berry = 3,
-    Seed = 4,
-    Arable = 128,
-    Water = 129
+    LF = 0x0A,
+    CR = 0x0D,
+    Grass = '0',
+    Grain = '1',
+    Lettuce = '2',
+    Berry = '3',
+    Seed = '4',
+    Arable = '_',
+    Water = '~',
 };
 
 enum HortirataScene {
@@ -137,22 +139,6 @@ Vector2 windowPos;
 */
 
 
-void setfields(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t *gamefields, uint8_t *randomfields)
-{
-    *gamefields = 0;
-    *randomfields = 0;
-    for (uint8_t row=0; row<BOARDROWS; row++)
-    {
-        for (uint8_t col=0; col<BOARDCOLUMNS; col++)
-        {
-            uint8_t v = board[row][col];
-            if (v < FIELDTYPECOUNT) *gamefields = *gamefields+1;
-            else if (v==Arable) *randomfields = *randomfields+1;
-        }
-    }
-}
-
-
 bool load(const char *fileName)
 {
     if (!FileExists(fileName)) return false;
@@ -161,24 +147,64 @@ bool load(const char *fileName)
     unsigned char* filedata = LoadFileData(fileName, &filelength);
     harvests = 0;
     eqharvests = eqharvestsUnchecked;
-    memcpy(board, filedata, BOARDROWS * BOARDCOLUMNS);
+    uint8_t row = 0;
+    uint8_t col = 0;
     for (uint8_t v=0; v<FIELDTYPECOUNT; v++) fieldtypecounts[v] = 0;
     gamefields = 0;
     randomfields = 0;
-    for (uint8_t row=0; row<BOARDROWS; row++)
+    for (uint8_t i=0; i<filelength; ++i)
     {
-        for (uint8_t col=0; col<BOARDCOLUMNS; col++)
+        uint8_t c = filedata[i];
+        switch (c)
         {
-            uint8_t v = board[row][col];
-            if (v == Arable) randomfields++;
-            else if (v < FIELDTYPECOUNT)
+            case LF:
+            case CR:
             {
-                fieldtypecounts[v]++;
+                if (0<col) row++;
+                col = 0;
+            } break;
+            case Grass:
+            case Grain:
+            case Lettuce:
+            case Berry:
+            case Seed:
+            {
+                board[row][col] = c;
+                col++;
+                if (BOARDCOLUMNS <= col)
+                {
+                    row++;
+                    col = 0;
+                }
+                fieldtypecounts[c-Grass]++;
                 gamefields++;
-            }
+            } break;
+            case Arable:
+            {
+                board[row][col] = c;
+                col++;
+                if (BOARDCOLUMNS <= col)
+                {
+                    row++;
+                    col = 0;
+                }
+                randomfields++;
+            } break;
+            case Water:
+            default:
+            {
+                board[row][col] = Water;
+                col++;
+                if (BOARDCOLUMNS <= col)
+                {
+                    row++;
+                    col = 0;
+                }
+            } break;
         }
-        fieldtypecounttarget = (gamefields + randomfields) / FIELDTYPECOUNT;
+        if (BOARDROWS <= row) break;
     }
+    fieldtypecounttarget = (gamefields + randomfields) / FIELDTYPECOUNT;
     UnloadFileData(filedata);
     if (0 == randomfields) scene = Playing;
     else scene = Draw;
@@ -195,20 +221,54 @@ bool load_level(uint8_t levelval)
 }
 
 
+bool save(const char *fileName)
+{
+    unsigned int bytesToWrite = BOARDROWS * (BOARDCOLUMNS+2);
+    char *data = MemAlloc(bytesToWrite);
+    uint8_t i = 0;
+    for (uint8_t row=0; row<BOARDROWS; ++row)
+    {
+        for (uint8_t col=0; col<BOARDCOLUMNS; ++col)
+        {
+            data[i] = board[row][col];
+            ++i;
+            if (col == BOARDCOLUMNS - 1)
+            {
+                data[i] = CR;
+                ++i;
+                data[i] = LF;
+                ++i;
+            }
+        }
+    }
+    bool success = SaveFileData(fileName, data, bytesToWrite);
+    return success;
+}
+
+
 void transform(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t fieldtypecounts[FIELDTYPECOUNT], uint8_t row, uint8_t col)
 {
-    uint8_t v = board[row][col];
+    uint8_t c0 = board[row][col];
     for (uint8_t row1=((0 < row) ? row-1 : 0); row1<=((row < BOARDROWS-1) ? row+1 : BOARDROWS-1); row1++)
     {
         for (uint8_t col1=((0 < col) ? col-1 : 0); col1<=((col < BOARDCOLUMNS-1) ? col+1 : BOARDCOLUMNS-1); col1++)
         {
             if ((row1==row) && (col1==col)) continue;
-            uint8_t v0 = board[row1][col1];
-            if (Arable <= v0) continue;
-            uint8_t v1 = (v0 + v) % FIELDTYPECOUNT;
-            board[row1][col1] = v1;
-            fieldtypecounts[v0]--;
-            fieldtypecounts[v1]++;
+            uint8_t c1 = board[row1][col1];
+            switch (c1)
+            {
+                case Grass:
+                case Grain:
+                case Lettuce:
+                case Berry:
+                case Seed:
+                {
+                    uint8_t c2 = ((c1-Grass + c0-Grass) % FIELDTYPECOUNT)+Grass;
+                    board[row1][col1] = c2;
+                    fieldtypecounts[c1-Grass]--;
+                    fieldtypecounts[c2-Grass]++;
+                } break;
+            }
         }
     }
 }
@@ -222,24 +282,28 @@ bool vcount_in_equilibrium(uint8_t fieldtypecounts[FIELDTYPECOUNT], uint8_t fiel
 
 bool simulate(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t fieldtypecounts[FIELDTYPECOUNT], uint8_t fieldtypecounttarget, uint8_t harvests)
 {
-    TraceLog(LOG_DEBUG, "hello");
     uint8_t simboard[BOARDROWS][BOARDCOLUMNS];
     uint8_t simvcount[FIELDTYPECOUNT];
-
     if (harvests == 0) return false;
-
     for (uint8_t row=0; row<BOARDROWS; row++)
     {
         for (uint8_t col=0; col<BOARDCOLUMNS; col++)
         {
-            uint8_t v = board[row][col];
-            if (0 < v && v < FIELDTYPECOUNT)
+            uint8_t c = board[row][col];
+            switch (c)
             {
-                memcpy(&simboard, board, BOARDROWS*BOARDCOLUMNS);
-                memcpy(&simvcount, fieldtypecounts, FIELDTYPECOUNT);
-                transform(simboard, simvcount, row, col);
-                if (vcount_in_equilibrium(simvcount, fieldtypecounttarget)) return true;
-                if ((1 < harvests) && simulate(simboard, simvcount, fieldtypecounttarget, harvests-1)) return true;
+                case Grass:
+                case Grain:
+                case Lettuce:
+                case Berry:
+                case Seed:
+                {
+                    memcpy(&simboard, board, BOARDROWS*BOARDCOLUMNS);
+                    memcpy(&simvcount, fieldtypecounts, FIELDTYPECOUNT);
+                    transform(simboard, simvcount, row, col);
+                    if (vcount_in_equilibrium(simvcount, fieldtypecounttarget)) return true;
+                    if ((1 < harvests) && simulate(simboard, simvcount, fieldtypecounttarget, harvests-1)) return true;
+                } break;
             }
         }
     }
@@ -264,12 +328,25 @@ void draw_board()
     {
         for (uint8_t col=0; col<BOARDCOLUMNS; col++)
         {
-            uint8_t v = board[row][col];
-            uint8_t i = (0 < fieldtypecounts[v]) ? min(TILEUNDERLEVEL + TILEOVERLEVEL, TILEUNDERLEVEL + fieldtypecounts[v] - fieldtypecounttarget) : TILEUNDERLEVEL;
+            uint8_t c = board[row][col];
+            uint8_t i = (0 < fieldtypecounts[c-Grass]) ? min(TILEUNDERLEVEL + TILEOVERLEVEL, TILEUNDERLEVEL + fieldtypecounts[c-Grass] - fieldtypecounttarget) : TILEUNDERLEVEL;
+            Rectangle source;
             Rectangle dest = {viewport.x + TILE_ORIGIN_X + col * TILESIZE, viewport.y + TILE_ORIGIN_Y + row * TILESIZE, TILESIZE, TILESIZE};
-            if (Arable <= v) DrawTexturePro(tilesTexture, ((Rectangle){(v - Arable) * TILESIZE, 0, TILESIZE, TILESIZE}), dest, ((Vector2){0, 0}), 0, WHITE);
-            else if (v == 0) DrawTexturePro(tilesTexture, ((Rectangle){i * TILESIZE, (1+v) * TILESIZE, TILESIZE, TILESIZE}), dest, ((Vector2){0, 0}), 0, WHITE);
-            else DrawTexturePro(tilesTexture, ((Rectangle){i * TILESIZE, (1+v) * TILESIZE, TILESIZE, TILESIZE}), dest, ((Vector2){0, 0}), 0, WHITE);
+            switch (c)
+            {
+                case Grass:
+                case Grain:
+                case Lettuce:
+                case Berry:
+                case Seed:
+                    source = (Rectangle){i * TILESIZE, (1+c-Grass) * TILESIZE, TILESIZE, TILESIZE}; break;
+                case Arable:
+                    source = (Rectangle){0 * TILESIZE, 0, TILESIZE, TILESIZE}; break;
+                case Water:
+                default:
+                    source = (Rectangle){1 * TILESIZE, 0, TILESIZE, TILESIZE}; break;
+            }
+            DrawTexturePro(tilesTexture, source, dest, ((Vector2){0, 0}), 0, WHITE);
         }
     }
     //DrawRectangleLinesEx(viewport, 1, MAGENTA);
@@ -363,15 +440,15 @@ int main(void)
                 if (0 < randomfields && entropy)
                 {
                     uint64_t randomvalue = __rdtsc();
-                    uint8_t row, col, v;
+                    uint8_t row, col, c;
                     for (row=0; row<BOARDROWS; ++row)
                     {
                         for (col=0; col<BOARDCOLUMNS; ++col)
                         {
-                            v = board[row][col];
-                            if (v == Arable) break;
+                            c = board[row][col];
+                            if (c == Arable) break;
                         }
-                        if (v == Arable) break;
+                        if (c == Arable) break;
                     }
                     uint8_t remgamefields = fieldtypecounttarget * FIELDTYPECOUNT - gamefields;
                     uint8_t remdummyfields = randomfields - remgamefields;
@@ -386,12 +463,12 @@ int main(void)
                         {
                             if (v1 < remdummyfields)
                             {
-                                board[row][col] = 0x81;
+                                board[row][col] = Water;
                                 randomfields--;
                             }
                             else if (v < populationsize)
                             {
-                                board[row][col] = v;
+                                board[row][col] = v+Grass;
                                 fieldtypecounts[v]++;
                                 gamefields++;
                                 randomfields--;
@@ -403,7 +480,7 @@ int main(void)
                         uint8_t v = randomvalue & 0x07;
                         if (v < FIELDTYPECOUNT)
                         {
-                            board[row][col] = v;
+                            board[row][col] = v+Grass;
                             fieldtypecounts[v]++;
                             gamefields++;
                             randomfields--;
@@ -411,14 +488,10 @@ int main(void)
                     }
                     else if (0 == remgamefields && 0 < remdummyfields)
                     {
-                        board[row][col] = 0x81;
+                        board[row][col] = Water;
                         randomfields--;
                     }
-                    if (0 == randomfields)
-                    {
-                        scene = Playing;
-
-                    }
+                    if (0 == randomfields) scene = Playing;
                 }
                 viewport = ((Rectangle){WX,WY,windowedScreenWidth,windowedScreenHeight});
                 draw_board();
@@ -438,12 +511,12 @@ int main(void)
                 uint8_t colmod = (uint32_t)(mouse.x - WX - TILE_ORIGIN_X) % TILESIZE;
                 uint8_t lbound = (TILESIZE-TILECENTERSIZE)/2;
                 uint8_t ubound = TILECENTERSIZE + lbound - 1;
-                uint8_t v = board[row][col];
+                uint8_t c = board[row][col];
                 bool validloc = \
                 (
                         (row < BOARDROWS && col < BOARDCOLUMNS)
                         &&
-                        (v < FIELDTYPECOUNT)
+                        (c-Grass < FIELDTYPECOUNT)
                         &&
                         (lbound <= rowmod && rowmod <= ubound && lbound <= colmod && colmod <= ubound)
                 );
@@ -508,7 +581,6 @@ int main(void)
                 int strwidth = MeasureText(str, 20);
                 DrawText(str, viewport.x + (viewport.width - strwidth) / 2, 100, 20, COLOR_FOREGROUND);
             }
-
         }
 
         DrawFPS(screenWidth-100, 10); // for debug
@@ -538,7 +610,7 @@ int main(void)
         if (IsKeyPressed(KEY_S))
         {
             sprintf(str, "%s\\%s", GetApplicationDirectory(), "puzzle.hortirata");
-            SaveFileData(str, board, BOARDROWS * BOARDCOLUMNS);
+            save(str);
         }
 
     }

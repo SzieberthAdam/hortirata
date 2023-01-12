@@ -1,13 +1,14 @@
 ﻿TODO
 ====
 1. Code rework
-    * scene
     * debug mode
 1. Change screen to 19x9 & remove background
+1. Viewport review & fix
 1. Optimize solver
 1. Give suggestion
 1. Farm-stead icon
 1. Forest icon
+1. Ensure non-win condition when draw
 
 
 Release version features

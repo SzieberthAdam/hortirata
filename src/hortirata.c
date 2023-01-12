@@ -13,8 +13,6 @@
 
 #include "raylib.h"
 
-#define TARGET_FPS     30
-
 #ifndef max
 #define max(a,b) (((a) > (b)) ? (a) : (b))
 #endif
@@ -35,37 +33,43 @@
 #define TILE_ORIGIN_X 32
 #define TILE_ORIGIN_Y 96
 
-
 #define COLOR_BACKGROUND BLACK
 #define COLOR_FOREGROUND WHITE
 #define COLOR_TITLE YELLOW
 
-#define SCENE_NEWGAME_DEFAULT 10
-#define SCENE_NEWGAME_LEVEL 11
-#define SCENE_NEWGAME 12
-#define SCENE_DRAWBOARD 20
-#define SCENE_GAME 30
-#define SCENE_WIN 40
-#define SCENE_THANKS 50
-
-#define STATE_WIN 0
-#define STATE_MANYHARVESTS 127
-#define STATE_BOARDUNDERCONSTRUCTION 255
-#define STATE_NEWLEVEL 0x80
-#define STATE_NEWLEVELWITHDRAW 0xC0
-
-#define MAXSIMHARVESTS FIELDTYPECOUNT
-
 #define WX ((screenWidth - windowedScreenWidth) / 2)
 #define WY ((screenHeight - windowedScreenHeight) / 2)
 
-char str[1024];
 
-typedef struct __attribute__((__packed__, __scalar_storage_order__("big-endian"))) {
-    uint8_t board[BOARDROWS][BOARDCOLUMNS];
-    uint32_t harvests;
-} HortirataData;
+enum HortirataFieldType {
+    Grass = 0,
+    Grain = 1,
+    Lettuce = 2,
+    Berry = 3,
+    Seed = 4,
+    Arable = 128,
+    Water = 129
+};
 
+enum HortirataScene {
+    NoScene = 0,
+    Draw = 1,
+    Playing = 11,
+    Win = 21,
+    Thanks = 22
+};
+
+enum eqharvestsSpecialValue {
+    eqharvestsWin = 0,
+    eqharvestsMaxCalculate = 5, // IMPORTANT
+    eqharvestsTooHighToCalculate = 254,
+    eqharvestsUnchecked = 255
+};
+
+
+/*
+=== HELPER FUNCTIONS ===========================================================================================
+*/
 
 // Greatest power of 2 less than or equal to x. Hacker's Delight, Figure 3-1.
 unsigned flp2(unsigned x)
@@ -97,6 +101,42 @@ unsigned ffs(int n)
 }
 
 
+/*
+=== GLOBAL VARIABLES ===========================================================================================
+*/
+
+char str[1024];
+uint32_t harvests = 0;
+uint8_t board[BOARDROWS][BOARDCOLUMNS];
+uint8_t eqharvests = 0;
+uint8_t fieldtypecounts[FIELDTYPECOUNT];
+uint8_t fieldtypecounttarget = 0;
+uint8_t gamefields = 0;
+uint8_t level = 0;
+uint8_t randomfields = 0;
+uint8_t scene = NoScene;
+
+int currentGesture = GESTURE_NONE;
+int display = 0;
+int fps = 30;
+int lastGesture = GESTURE_NONE;
+Rectangle viewport;
+Texture2D backgroundTexture;
+Texture2D tilesTexture;
+uint16_t screenHeight = 0;
+uint16_t screenWidth = 0;
+uint16_t windowedScreenHeight = 0;
+uint16_t windowedScreenWidth = 0;
+Vector2 mouse;
+Vector2 mouseDelta;
+Vector2 windowPos;
+
+
+/*
+=== FUNCTIONS ==================================================================================================
+*/
+
+
 void setfields(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t *gamefields, uint8_t *randomfields)
 {
     *gamefields = 0;
@@ -107,39 +147,55 @@ void setfields(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t *gamefields, uint
         {
             uint8_t v = board[row][col];
             if (v < FIELDTYPECOUNT) *gamefields = *gamefields+1;
-            else if (v==0x80) *randomfields = *randomfields+1;
+            else if (v==Arable) *randomfields = *randomfields+1;
         }
     }
 }
 
 
-bool load(const char *fileName, HortirataData *data, uint8_t vcount[FIELDTYPECOUNT], uint8_t *targetvcount)
+bool load(const char *fileName)
 {
     if (!FileExists(fileName)) return false;
     unsigned int filelength = GetFileLength(fileName);
-    if (filelength != BOARDROWS * BOARDCOLUMNS) return false;
+    if (filelength < BOARDROWS*BOARDCOLUMNS) return false;
     unsigned char* filedata = LoadFileData(fileName, &filelength);
-    data->harvests = 0;
-    memcpy(&data->board, filedata, filelength);
-    for (uint8_t v=0; v<FIELDTYPECOUNT; v++) vcount[v] = 0;
-    uint8_t gamefields = 0;
-    uint8_t randomfields = 0;
+    harvests = 0;
+    eqharvests = eqharvestsUnchecked;
+    memcpy(board, filedata, BOARDROWS * BOARDCOLUMNS);
+    for (uint8_t v=0; v<FIELDTYPECOUNT; v++) fieldtypecounts[v] = 0;
+    gamefields = 0;
+    randomfields = 0;
     for (uint8_t row=0; row<BOARDROWS; row++)
     {
         for (uint8_t col=0; col<BOARDCOLUMNS; col++)
         {
-            uint8_t v = data->board[row][col];
-            if (v < FIELDTYPECOUNT) vcount[v]++;
+            uint8_t v = board[row][col];
+            if (v == Arable) randomfields++;
+            else if (v < FIELDTYPECOUNT)
+            {
+                fieldtypecounts[v]++;
+                gamefields++;
+            }
         }
-        setfields(data->board, &gamefields, &randomfields);
-        *targetvcount = (gamefields + randomfields) / FIELDTYPECOUNT;
+        fieldtypecounttarget = (gamefields + randomfields) / FIELDTYPECOUNT;
     }
     UnloadFileData(filedata);
+    if (0 == randomfields) scene = Playing;
+    else scene = Draw;
     return true;
 }
 
 
-void transform(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t vcount[FIELDTYPECOUNT], uint8_t row, uint8_t col)
+bool load_level(uint8_t levelval)
+{
+    sprintf(str, "%s\\level%03d.hortirata", GetApplicationDirectory(), levelval);
+    bool success = load(str);
+    if (success) level = levelval;
+    return success;
+}
+
+
+void transform(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t fieldtypecounts[FIELDTYPECOUNT], uint8_t row, uint8_t col)
 {
     uint8_t v = board[row][col];
     for (uint8_t row1=((0 < row) ? row-1 : 0); row1<=((row < BOARDROWS-1) ? row+1 : BOARDROWS-1); row1++)
@@ -148,27 +204,25 @@ void transform(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t vcount[FIELDTYPEC
         {
             if ((row1==row) && (col1==col)) continue;
             uint8_t v0 = board[row1][col1];
-            if (0x80 <= v0) continue;
+            if (Arable <= v0) continue;
             uint8_t v1 = (v0 + v) % FIELDTYPECOUNT;
             board[row1][col1] = v1;
-            vcount[v0]--;
-            vcount[v1]++;
+            fieldtypecounts[v0]--;
+            fieldtypecounts[v1]++;
         }
     }
 }
 
-bool vcount_in_equilibrium(uint8_t vcount[FIELDTYPECOUNT], uint8_t targetvcount)
+bool vcount_in_equilibrium(uint8_t fieldtypecounts[FIELDTYPECOUNT], uint8_t fieldtypecounttarget)
 {
-    for (uint8_t v=0; v<FIELDTYPECOUNT; v++)
-    {
-        if (vcount[v] != targetvcount) return false;
-    }
+    for (uint8_t v=0; v<FIELDTYPECOUNT; v++) if (fieldtypecounts[v] != fieldtypecounttarget) return false;
     return true;
 }
 
 
-bool simulate(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t vcount[FIELDTYPECOUNT], uint8_t targetvcount, uint8_t harvests)
+bool simulate(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t fieldtypecounts[FIELDTYPECOUNT], uint8_t fieldtypecounttarget, uint8_t harvests)
 {
+    TraceLog(LOG_DEBUG, "hello");
     uint8_t simboard[BOARDROWS][BOARDCOLUMNS];
     uint8_t simvcount[FIELDTYPECOUNT];
 
@@ -182,10 +236,10 @@ bool simulate(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t vcount[FIELDTYPECO
             if (0 < v && v < FIELDTYPECOUNT)
             {
                 memcpy(&simboard, board, BOARDROWS*BOARDCOLUMNS);
-                memcpy(&simvcount, vcount, FIELDTYPECOUNT);
+                memcpy(&simvcount, fieldtypecounts, FIELDTYPECOUNT);
                 transform(simboard, simvcount, row, col);
-                if (vcount_in_equilibrium(simvcount, targetvcount)) return true;
-                if ((1 < harvests) && simulate(simboard, simvcount, targetvcount, harvests-1)) return true;
+                if (vcount_in_equilibrium(simvcount, fieldtypecounttarget)) return true;
+                if ((1 < harvests) && simulate(simboard, simvcount, fieldtypecounttarget, harvests-1)) return true;
             }
         }
     }
@@ -193,16 +247,16 @@ bool simulate(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t vcount[FIELDTYPECO
 }
 
 
-void draw_board(HortirataData data, uint8_t vcount[FIELDTYPECOUNT], uint8_t targetvcount, uint8_t eqharvests, uint8_t level, Rectangle viewport, Texture2D bg, Texture2D tiles)
+void draw_board()
 {
-    DrawTexture(bg, viewport.x, viewport.y, WHITE);
+    DrawTexture(backgroundTexture, viewport.x, viewport.y, WHITE);
     {
         sprintf(str, "HORTIRATA");
         int strwidth = MeasureText(str, 30);
         DrawText(str, viewport.x + (uint16_t)((viewport.width - strwidth)/2), viewport.y + 11, 30, COLOR_TITLE);
     }
     {
-        sprintf(str, "A game for Ludum Dare 52 (Theme: Harvest) by SZIEBERTH ""\xC3\x81""d""\xC3\xA1""m");
+        sprintf(str, "A game by SZIEBERTH ""\xC3\x81""d""\xC3\xA1""m");
         int strwidth = MeasureText(str, 10);
         DrawText(str, viewport.x + (uint16_t)((viewport.width - strwidth)/2), viewport.y + 41, 10, COLOR_FOREGROUND);
     }
@@ -210,35 +264,14 @@ void draw_board(HortirataData data, uint8_t vcount[FIELDTYPECOUNT], uint8_t targ
     {
         for (uint8_t col=0; col<BOARDCOLUMNS; col++)
         {
-            uint8_t v = data.board[row][col];
-            uint8_t i = (0 < vcount[v]) ? min(TILEUNDERLEVEL + TILEOVERLEVEL, TILEUNDERLEVEL + vcount[v] - targetvcount) : TILEUNDERLEVEL;
+            uint8_t v = board[row][col];
+            uint8_t i = (0 < fieldtypecounts[v]) ? min(TILEUNDERLEVEL + TILEOVERLEVEL, TILEUNDERLEVEL + fieldtypecounts[v] - fieldtypecounttarget) : TILEUNDERLEVEL;
             Rectangle dest = {viewport.x + TILE_ORIGIN_X + col * TILESIZE, viewport.y + TILE_ORIGIN_Y + row * TILESIZE, TILESIZE, TILESIZE};
-            if (0x80 <= v)
-            {
-                DrawTexturePro(tiles, ((Rectangle){(v - 0x80) * TILESIZE, 0, TILESIZE, TILESIZE}), dest, ((Vector2){0, 0}), 0, WHITE);
-            }
-            else if (v == 0)
-            {
-                DrawTexturePro(tiles, ((Rectangle){i * TILESIZE, (1+v) * TILESIZE, TILESIZE, TILESIZE}), dest, ((Vector2){0, 0}), 0, WHITE);
-            }
-            else
-            {
-                DrawTexturePro(tiles, ((Rectangle){i * TILESIZE, (1+v) * TILESIZE, TILESIZE, TILESIZE}), dest, ((Vector2){0, 0}), 0, WHITE);
-            }
+            if (Arable <= v) DrawTexturePro(tilesTexture, ((Rectangle){(v - Arable) * TILESIZE, 0, TILESIZE, TILESIZE}), dest, ((Vector2){0, 0}), 0, WHITE);
+            else if (v == 0) DrawTexturePro(tilesTexture, ((Rectangle){i * TILESIZE, (1+v) * TILESIZE, TILESIZE, TILESIZE}), dest, ((Vector2){0, 0}), 0, WHITE);
+            else DrawTexturePro(tilesTexture, ((Rectangle){i * TILESIZE, (1+v) * TILESIZE, TILESIZE, TILESIZE}), dest, ((Vector2){0, 0}), 0, WHITE);
         }
     }
-
-    if (eqharvests == STATE_WIN) sprintf(str, "CONGRATULATIONS!");
-    else if (eqharvests == STATE_MANYHARVESTS) sprintf(str, "EQUILIBRIUM OVER %d HARVESTS", MAXSIMHARVESTS);
-    else if (STATE_NEWLEVELWITHDRAW <= eqharvests) sprintf(str, "MOVE YOUR MOUSE!");
-    else sprintf(str, "EQUILIBRIUM IN %d HARVEST%s", eqharvests, ((eqharvests==1) ? "" : "S"));
-    int strwidth = MeasureText(str, 20);
-    DrawText(str, viewport.x + TILE_ORIGIN_X + viewport.width - strwidth - 73, viewport.y + TILE_ORIGIN_Y + TILESIZE * BOARDROWS + 55, 20, COLOR_FOREGROUND);
-
-
-    if (0 < data.harvests) sprintf(str, "%d HARVEST%s", data.harvests, ((data.harvests==1) ? "" : "S"));
-    else sprintf(str, "LEVEL %d", level);
-    DrawText(str, viewport.x + TILE_ORIGIN_X + 9, viewport.y + TILE_ORIGIN_Y + TILESIZE * BOARDROWS + 55, 20, COLOR_FOREGROUND);
     //DrawRectangleLinesEx(viewport, 1, MAGENTA);
 }
 
@@ -247,43 +280,30 @@ int main(void)
     {
     //SetTraceLogLevel(LOG_DEBUG);
 
-    HortirataData data;
-    uint8_t vcount[FIELDTYPECOUNT];
-    uint8_t targetvcount;
+    load_level(1);
 
-    uint8_t gamefields = 0;
-    uint8_t randomfields = 0;
-
-    uint8_t level = 1;
-    uint8_t scene = SCENE_NEWGAME_LEVEL;
-    uint8_t eqharvests = 0;
-
-    Vector2 mouse;
-    Vector2 mousedelta;
-    int currentGesture = GESTURE_NONE;
-    int lastGesture = GESTURE_NONE;
-
-    SetConfigFlags(FLAG_VSYNC_HINT);
-    SetTargetFPS(TARGET_FPS);
-    sprintf(str, "%s\\%s", GetApplicationDirectory(), "bg.png");
-    Image bg_image = LoadImage(str);
-    uint16_t windowedScreenWidth = bg_image.width;
-    uint16_t windowedScreenHeight = bg_image.height;
-    uint16_t screenWidth = windowedScreenWidth;
-    uint16_t screenHeight = windowedScreenHeight;
+    SetTargetFPS(fps);
 
     sprintf(str, "%s\\%s", GetApplicationDirectory(), "tiles.png");
     Image tiles_image = LoadImage(str);
+    sprintf(str, "%s\\%s", GetApplicationDirectory(), "bg.png");
+    Image bg_image = LoadImage(str);
+
+    windowedScreenWidth = bg_image.width;
+    windowedScreenHeight = bg_image.height;
+    screenWidth = windowedScreenWidth;
+    screenHeight = windowedScreenHeight;
+
     InitWindow(windowedScreenWidth, windowedScreenHeight, "Hortirata");
-    Vector2 windowPos = GetWindowPosition();
+    windowPos = GetWindowPosition();
 
     // call LoadTextureFromImage(); STRICTLY AFTER InitWindow();!
-    Texture2D bg = LoadTextureFromImage(bg_image);
-    UnloadImage(bg_image);
-    Texture2D tiles = LoadTextureFromImage(tiles_image);
+    tilesTexture = LoadTextureFromImage(tiles_image);
     UnloadImage(tiles_image);
+    backgroundTexture = LoadTextureFromImage(bg_image);
+    UnloadImage(bg_image);
 
-    int display = GetCurrentMonitor(); // see what display we are on right now
+    display = GetCurrentMonitor(); // see what display we are on right now
 
     while (!WindowShouldClose())
     {
@@ -316,24 +336,6 @@ int main(void)
             }
         }
 
-        // check for d key
-        if (IsKeyPressed(KEY_D))
-        {
-            sprintf(str, "LEVEL = %d", level);
-            TraceLog(LOG_DEBUG, str);
-            TraceLog(LOG_DEBUG, "BOARD:");
-            for (uint8_t row=0; row<BOARDROWS; row++)
-            {
-                sprintf(str, "| %3d | %3d | %3d | %3d | %3d | %3d | %3d | %3d | %3d |", data.board[row][0], data.board[row][1], data.board[row][2], data.board[row][3], data.board[row][4], data.board[row][5], data.board[row][6], data.board[row][7], data.board[row][8]);
-                TraceLog(LOG_DEBUG, str);
-            }
-            TraceLog(LOG_DEBUG, "VCOUNT:");
-            sprintf(str, "[ 0:%3d , 1:%3d , 2:%3d , 3:%3d , 4:%3d ]", vcount[0], vcount[1], vcount[2], vcount[3], vcount[4]);
-            TraceLog(LOG_DEBUG, str);
-            sprintf(str, "TARGET VCOUNT: %d ; valid: %d, random: %d", targetvcount, gamefields, randomfields);
-            TraceLog(LOG_DEBUG, str);
-        }
-
         screenWidth = GetScreenWidth();
         screenHeight = GetScreenHeight();
 
@@ -348,44 +350,15 @@ int main(void)
 
         switch (scene)
         {
-
-            case SCENE_NEWGAME_DEFAULT:
-            {
-                sprintf(str, "%s\\%s", GetApplicationDirectory(), "default.hortirata");
-                bool success = load(str, &data, vcount, &targetvcount);
-                if (success)
-                {
-                    level = 0;
-                    scene = SCENE_NEWGAME;
-                }
-            }
-
-            case SCENE_NEWGAME_LEVEL:
-            {
-                sprintf(str, "%s\\level%03d.hortirata", GetApplicationDirectory(), level);
-                bool success = load(str, &data, vcount, &targetvcount);
-                if (success) scene = SCENE_NEWGAME;
-                else scene = SCENE_THANKS; // TODO: endscreen
-                eqharvests = 0;
-            } break;
-
-            case SCENE_NEWGAME:
-            {
-                setfields(data.board, &gamefields, &randomfields);
-                if (0 == randomfields) scene = SCENE_GAME;
-                else scene = SCENE_DRAWBOARD;
-                eqharvests = 0;
-            } break;
-
-            case SCENE_DRAWBOARD:
+            case Draw:
             {
                 bool entropy = false;
                 if (IsKeyPressed(KEY_SPACE)) entropy = true;
                 if (!entropy)
                 {
-                    if (currentGesture == GESTURE_DRAG) mousedelta = GetGestureDragVector();
-                    else mousedelta = GetMouseDelta();
-                    entropy = mousedelta.x != (float)(0) || mousedelta.y != (float)(0);
+                    if (currentGesture == GESTURE_DRAG) mouseDelta = GetGestureDragVector();
+                    else mouseDelta = GetMouseDelta();
+                    entropy = mouseDelta.x != (float)(0) || mouseDelta.y != (float)(0);
                 }
                 if (0 < randomfields && entropy)
                 {
@@ -395,15 +368,13 @@ int main(void)
                     {
                         for (col=0; col<BOARDCOLUMNS; ++col)
                         {
-                            v = data.board[row][col];
-                            if (v == 0x80) break;
+                            v = board[row][col];
+                            if (v == Arable) break;
                         }
-                        if (v == 0x80) break;
+                        if (v == Arable) break;
                     }
-                    uint8_t remgamefields = targetvcount * FIELDTYPECOUNT - gamefields;
+                    uint8_t remgamefields = fieldtypecounttarget * FIELDTYPECOUNT - gamefields;
                     uint8_t remdummyfields = randomfields - remgamefields;
-                    //sprintf(str, "TARGET VCOUNT: %d ; valid: %d (%d), random: %d (%d)", targetvcount, gamefields, remgamefields, randomfields, remdummyfields);
-                    //TraceLog(LOG_DEBUG, str);
                     if (0 < remgamefields && 0 < remdummyfields)
                     {
                         uint8_t populationsize = randomfields;
@@ -415,42 +386,51 @@ int main(void)
                         {
                             if (v1 < remdummyfields)
                             {
-                                data.board[row][col] = 0x81;
+                                board[row][col] = 0x81;
                                 randomfields--;
                             }
                             else if (v < populationsize)
                             {
-                                data.board[row][col] = v;
-                                vcount[v]++;
+                                board[row][col] = v;
+                                fieldtypecounts[v]++;
                                 gamefields++;
                                 randomfields--;
                             }
                         }
-                        //sprintf(str, "populationsize: %d ; randsize: %d ; randmask: %d; v: %d; v1: %d", populationsize, randsize, randmask, v, v1);
-                        //TraceLog(LOG_DEBUG, str);
                     }
                     if (0 < remgamefields && 0 == remdummyfields)
                     {
                         uint8_t v = randomvalue & 0x07;
                         if (v < FIELDTYPECOUNT)
                         {
-                            data.board[row][col] = v;
-                            vcount[v]++;
+                            board[row][col] = v;
+                            fieldtypecounts[v]++;
                             gamefields++;
                             randomfields--;
                         }
                     }
                     else if (0 == remgamefields && 0 < remdummyfields)
                     {
-                        data.board[row][col] = 0x81;
+                        board[row][col] = 0x81;
                         randomfields--;
                     }
-                    if (0 == randomfields) scene = SCENE_GAME;
+                    if (0 == randomfields)
+                    {
+                        scene = Playing;
+
+                    }
                 }
-                draw_board(data, vcount, targetvcount, STATE_BOARDUNDERCONSTRUCTION, level, ((Rectangle){WX,WY,windowedScreenWidth,windowedScreenHeight}), bg, tiles);
+                viewport = ((Rectangle){WX,WY,windowedScreenWidth,windowedScreenHeight});
+                draw_board();
+                sprintf(str, "MOVE YOUR MOUSE!");
+                int strwidth = MeasureText(str, 20);
+                DrawText(str, viewport.x + TILE_ORIGIN_X + viewport.width - strwidth - 73, viewport.y + TILE_ORIGIN_Y + TILESIZE * BOARDROWS + 55, 20, COLOR_FOREGROUND);
+                if (0 < harvests) sprintf(str, "%d HARVEST%s", harvests, ((harvests==1) ? "" : "S"));
+                else sprintf(str, "LEVEL %d", level);
+                DrawText(str, viewport.x + TILE_ORIGIN_X + 9, viewport.y + TILE_ORIGIN_Y + TILESIZE * BOARDROWS + 55, 20, COLOR_FOREGROUND);
             } break;
 
-            case SCENE_GAME:
+            case Playing:
             {
                 uint8_t row = (mouse.y - WY - TILE_ORIGIN_Y) / TILESIZE;
                 uint8_t col = (mouse.x - WX - TILE_ORIGIN_X) / TILESIZE;
@@ -458,9 +438,7 @@ int main(void)
                 uint8_t colmod = (uint32_t)(mouse.x - WX - TILE_ORIGIN_X) % TILESIZE;
                 uint8_t lbound = (TILESIZE-TILECENTERSIZE)/2;
                 uint8_t ubound = TILECENTERSIZE + lbound - 1;
-                uint8_t v = data.board[row][col];
-                //sprintf(str, "mouse:[%d,%d]->[%d,%d] mods=(%d,%d); v=%d", (uint16_t)mouse.x, (uint16_t)mouse.y, row, col, rowmod, colmod, v);
-                //TraceLog(LOG_DEBUG, str);
+                uint8_t v = board[row][col];
                 bool validloc = \
                 (
                         (row < BOARDROWS && col < BOARDCOLUMNS)
@@ -471,52 +449,69 @@ int main(void)
                 );
                 if (validloc && (currentGesture != lastGesture && currentGesture == GESTURE_TAP))
                 {
-                    transform(data.board, vcount, row, col);
-                    data.harvests++;
-                    eqharvests = 0;
+                    transform(board, fieldtypecounts, row, col);
+                    harvests++;
+                    eqharvests = eqharvestsUnchecked;
                 }
-                bool equilibrium = vcount_in_equilibrium(vcount, targetvcount);
-                if (equilibrium) scene = SCENE_WIN;
-                else if (eqharvests == 0)
+                bool equilibrium = vcount_in_equilibrium(fieldtypecounts, fieldtypecounttarget);
+                if (equilibrium)
                 {
-                    eqharvests = STATE_NEWLEVEL + level;
-                    for (eqharvests=1; eqharvests <= MAXSIMHARVESTS; eqharvests++)
+                    eqharvests = eqharvestsWin;
+                    scene = Win;
+                }
+                else if (eqharvests == eqharvestsUnchecked)
+                {
+                    for (eqharvests=1; eqharvests <= eqharvestsMaxCalculate; eqharvests++)
                     {
-                        equilibrium = simulate(data.board, vcount, targetvcount, eqharvests);
+                        equilibrium = simulate(board, fieldtypecounts, fieldtypecounttarget, eqharvests);
                         if (equilibrium) break;
                     }
-                    if (!equilibrium) eqharvests = STATE_MANYHARVESTS;
+                    if (!equilibrium) eqharvests = eqharvestsTooHighToCalculate;
                 }
-                Rectangle viewport = {WX,WY,windowedScreenWidth,windowedScreenHeight};
-                draw_board(data, vcount, targetvcount, eqharvests, level, viewport, bg, tiles);
+                viewport = (Rectangle){WX,WY,windowedScreenWidth,windowedScreenHeight};
+                draw_board();
+                if (eqharvestsMaxCalculate < eqharvests) sprintf(str, "EQUILIBRIUM OVER %d HARVEST%s", eqharvestsMaxCalculate, ((eqharvestsMaxCalculate==1) ? "" : "S"));
+                else sprintf(str, "EQUILIBRIUM IN %d HARVEST%s", eqharvests, ((eqharvests==1) ? "" : "S"));
+                int strwidth = MeasureText(str, 20);
+                DrawText(str, viewport.x + TILE_ORIGIN_X + viewport.width - strwidth - 73, viewport.y + TILE_ORIGIN_Y + TILESIZE * BOARDROWS + 55, 20, COLOR_FOREGROUND);
+                if (0 < harvests) sprintf(str, "%d HARVEST%s", harvests, ((harvests==1) ? "" : "S"));
+                else sprintf(str, "LEVEL %d", level);
+                DrawText(str, viewport.x + TILE_ORIGIN_X + 9, viewport.y + TILE_ORIGIN_Y + TILESIZE * BOARDROWS + 55, 20, COLOR_FOREGROUND);
                 if (validloc && (currentGesture == GESTURE_NONE || currentGesture == GESTURE_DRAG))
                 {
                     Rectangle dest = {viewport.x + TILE_ORIGIN_X + col * TILESIZE, viewport.y + TILE_ORIGIN_Y + row * TILESIZE, TILESIZE, TILESIZE};
-                    DrawTexturePro(tiles, ((Rectangle){TILE_HOVER_COL * TILESIZE, 0, TILESIZE, TILESIZE}), dest, ((Vector2){0, 0}), 0, WHITE);
+                    DrawTexturePro(tilesTexture, ((Rectangle){TILE_HOVER_COL * TILESIZE, 0, TILESIZE, TILESIZE}), dest, ((Vector2){0, 0}), 0, WHITE);
                 }
             } break;
 
-            case SCENE_WIN:
+            case Win:
             {
+                viewport = (Rectangle){WX,WY,windowedScreenWidth,windowedScreenHeight};
+                draw_board();
+                sprintf(str, "CONGRATULATIONS!");
+                int strwidth = MeasureText(str, 20);
+                DrawText(str, viewport.x + TILE_ORIGIN_X + viewport.width - strwidth - 73, viewport.y + TILE_ORIGIN_Y + TILESIZE * BOARDROWS + 55, 20, COLOR_FOREGROUND);
+                if (0 < harvests) sprintf(str, "%d HARVEST%s", harvests, ((harvests==1) ? "" : "S"));
+                else sprintf(str, "LEVEL %d", level);
+                DrawText(str, viewport.x + TILE_ORIGIN_X + 9, viewport.y + TILE_ORIGIN_Y + TILESIZE * BOARDROWS + 55, 20, COLOR_FOREGROUND);
                 if (currentGesture != lastGesture && currentGesture == GESTURE_TAP)
                 {
-                    level++;
-                    scene = SCENE_NEWGAME_LEVEL;
+                    bool success = load_level(level+1);
+                    if (!success) scene = Thanks;
                 }
-                draw_board(data, vcount, targetvcount, STATE_WIN, level, ((Rectangle){WX,WY,windowedScreenWidth,windowedScreenHeight}), bg, tiles);
             } break;
 
-            case SCENE_THANKS:
+            case Thanks:
             {
+                viewport = (Rectangle){WX,WY,windowedScreenWidth,windowedScreenHeight};
                 sprintf(str, "THANKS FOR PLAYING!");
                 int strwidth = MeasureText(str, 20);
-                Rectangle viewport = {WX,WY,windowedScreenWidth,windowedScreenHeight};
                 DrawText(str, viewport.x + (viewport.width - strwidth) / 2, 100, 20, COLOR_FOREGROUND);
             }
 
         }
 
-        //DrawFPS(screenWidth-100, 10); // for debug
+        DrawFPS(screenWidth-100, 10); // for debug
 
         EndDrawing();
         //----------------------------------------------------------------------------------
@@ -527,12 +522,8 @@ int main(void)
             FilePathList droppedfiles = LoadDroppedFiles();
             if (droppedfiles.count == 1)
             {
-                bool success = load(droppedfiles.paths[0], &data, vcount, &targetvcount);
-                if (success)
-                {
-                    level = 0;
-                    scene = SCENE_NEWGAME;
-                }
+                bool success = load(droppedfiles.paths[0]);
+                if (success) level = 0;
             }
             UnloadDroppedFiles(droppedfiles);
         }
@@ -540,18 +531,14 @@ int main(void)
         if (IsKeyPressed(KEY_L))
         {
             sprintf(str, "%s\\%s", GetApplicationDirectory(), "puzzle.hortirata");
-            bool success = load(str, &data, vcount, &targetvcount);
-            if (success)
-            {
-                level = 0;
-                scene = SCENE_NEWGAME;
-            }
+            bool success = load(str);
+            if (success) level = 0;
         }
         // Quicksave
         if (IsKeyPressed(KEY_S))
         {
             sprintf(str, "%s\\%s", GetApplicationDirectory(), "puzzle.hortirata");
-            SaveFileData(str, data.board, BOARDROWS * BOARDCOLUMNS);
+            SaveFileData(str, board, BOARDROWS * BOARDCOLUMNS);
         }
 
     }
@@ -559,8 +546,8 @@ int main(void)
     // De-Initialization
     //--------------------------------------------------------------------------------------
     CloseWindow();        // Close window and OpenGL context
-    UnloadTexture(bg);
-    UnloadTexture(tiles);
+    UnloadTexture(backgroundTexture);
+    UnloadTexture(tilesTexture);
     //--------------------------------------------------------------------------------------
 
     return 0;

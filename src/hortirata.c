@@ -111,10 +111,10 @@ int currentGesture = GESTURE_NONE;
 int display = 0;
 int fps = 30;
 int lastGesture = GESTURE_NONE;
-Rectangle textboxLevel = {99, 687, 58, 26};
-Rectangle textboxPicks = {235, 687, 58, 26};
-Rectangle tileWinDest = {627, 687, 26, 26};
-Rectangle tileWinSource = {915, 19, 26, 26};
+Rectangle textboxLevel = {112, 688, 240, 24};
+Rectangle textboxPicks = {1000, 688, 80, 24};
+Rectangle tileWinDest = {624, 684, 32, 32};
+Rectangle tileWinSource = {912, 16, 32, 32};
 Rectangle viewport;
 Texture2D backgroundTexture;
 Texture2D tilesTexture;
@@ -358,18 +358,18 @@ void draw_info()
         }; // fallthrough!
         case 1:
         {
-            DrawRectangle(viewport.x + 611, viewport.y + 691, 10, 18, COLOR_FOREGROUND);
-            DrawRectangle(viewport.x + 659, viewport.y + 691, 10, 18, COLOR_FOREGROUND);
+            DrawRectangle(viewport.x + 600, viewport.y + 688, 16, 24, COLOR_FOREGROUND);
+            DrawRectangle(viewport.x + 664, viewport.y + 688, 16, 24, COLOR_FOREGROUND);
         }; // fallthrough!
         case 2:
         {
-            DrawRectangle(viewport.x + 595, viewport.y + 695, 10, 10, COLOR_FOREGROUND);
-            DrawRectangle(viewport.x + 675, viewport.y + 695, 10, 10, COLOR_FOREGROUND);
+            DrawRectangle(viewport.x + 576, viewport.y + 692, 16, 16, COLOR_FOREGROUND);
+            DrawRectangle(viewport.x + 688, viewport.y + 692, 16, 16, COLOR_FOREGROUND);
         }; // fallthrough!
         case 3:
         {
-            DrawRectangle(viewport.x + 579, viewport.y + 699, 10, 2, COLOR_FOREGROUND);
-            DrawRectangle(viewport.x + 691, viewport.y + 699, 10, 2, COLOR_FOREGROUND);
+            DrawRectangle(viewport.x + 552, viewport.y + 696, 16, 8, COLOR_FOREGROUND);
+            DrawRectangle(viewport.x + 712, viewport.y + 696, 16, 8, COLOR_FOREGROUND);
         } break;
     }
 }

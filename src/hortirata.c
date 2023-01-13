@@ -4,7 +4,7 @@
 #include <string.h>
 
 // TSC clock
-// https://stackoverflow.com/questions/13772567/how-to-get-the-cpu-cycle-count-in-x86-TILESIZE-from-c
+// https://stackoverflow.com/questions/13772567/how-to-get-the-cpu-cycle-count-in-x86-tileSize-from-c
 #ifdef _MSC_VER
 # include <intrin.h>
 #else
@@ -24,21 +24,9 @@
 #define BOARDROWS 9
 #define BOARDCOLUMNS 19
 
-#define TILESIZE 64
-#define TILECENTERSIZE 50
-#define TILEUNDERLEVEL 9
-#define TILEOVERLEVEL 9
-#define TILE_HOVER_COL 17
-#define TILE_LOCK_COL 18
-#define TILE_ORIGIN_X 32
-#define TILE_ORIGIN_Y 96
-
 #define COLOR_BACKGROUND BLACK
 #define COLOR_FOREGROUND WHITE
 #define COLOR_TITLE YELLOW
-
-#define WX ((screenWidth - windowedScreenWidth) / 2)
-#define WY ((screenHeight - windowedScreenHeight) / 2)
 
 
 enum HortirataFieldType {
@@ -63,7 +51,7 @@ enum HortirataScene {
 
 enum eqharvestsSpecialValue {
     eqharvestsWin = 0,
-    eqharvestsMaxCalculate = 5, // IMPORTANT
+    eqharvestsMaxCalculate = 3, // IMPORTANT
     eqharvestsTooHighToCalculate = 254,
     eqharvestsUnchecked = 255
 };
@@ -127,8 +115,15 @@ Texture2D backgroundTexture;
 Texture2D tilesTexture;
 uint16_t screenHeight = 0;
 uint16_t screenWidth = 0;
+uint16_t tileOriginX = 32;
+uint16_t tileOriginY = 72;
 uint16_t windowedScreenHeight = 0;
 uint16_t windowedScreenWidth = 0;
+uint8_t tileActiveSize = 50;
+uint8_t tileDeficitAvailable = 9;
+uint8_t tileHoverX = 17;
+uint8_t tileSize = 64;
+uint8_t tileSurplusAvailable = 9;
 Vector2 mouse;
 Vector2 mouseDelta;
 Vector2 windowPos;
@@ -292,8 +287,7 @@ bool simulate(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t fieldtypecounts[FI
             uint8_t c = board[row][col];
             switch (c)
             {
-                case Grass:
-                case Grain:
+                case Grain:  // Grass intentionally left out
                 case Lettuce:
                 case Berry:
                 case Seed:
@@ -314,24 +308,14 @@ bool simulate(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t fieldtypecounts[FI
 void draw_board()
 {
     DrawTexture(backgroundTexture, viewport.x, viewport.y, WHITE);
-    {
-        sprintf(str, "HORTIRATA");
-        int strwidth = MeasureText(str, 30);
-        DrawText(str, viewport.x + (uint16_t)((viewport.width - strwidth)/2), viewport.y + 11, 30, COLOR_TITLE);
-    }
-    {
-        sprintf(str, "A game by SZIEBERTH ""\xC3\x81""d""\xC3\xA1""m");
-        int strwidth = MeasureText(str, 10);
-        DrawText(str, viewport.x + (uint16_t)((viewport.width - strwidth)/2), viewport.y + 41, 10, COLOR_FOREGROUND);
-    }
     for (uint8_t row=0; row<BOARDROWS; row++)
     {
         for (uint8_t col=0; col<BOARDCOLUMNS; col++)
         {
             uint8_t c = board[row][col];
-            uint8_t i = (0 < fieldtypecounts[c-Grass]) ? min(TILEUNDERLEVEL + TILEOVERLEVEL, TILEUNDERLEVEL + fieldtypecounts[c-Grass] - fieldtypecounttarget) : TILEUNDERLEVEL;
+            uint8_t i = (0 < fieldtypecounts[c-Grass]) ? min(tileDeficitAvailable + tileSurplusAvailable, tileDeficitAvailable + fieldtypecounts[c-Grass] - fieldtypecounttarget) : tileDeficitAvailable;
             Rectangle source;
-            Rectangle dest = {viewport.x + TILE_ORIGIN_X + col * TILESIZE, viewport.y + TILE_ORIGIN_Y + row * TILESIZE, TILESIZE, TILESIZE};
+            Rectangle dest = {viewport.x + tileOriginX + col * tileSize, viewport.y + tileOriginY + row * tileSize, tileSize, tileSize};
             switch (c)
             {
                 case Grass:
@@ -339,12 +323,12 @@ void draw_board()
                 case Lettuce:
                 case Berry:
                 case Seed:
-                    source = (Rectangle){i * TILESIZE, (1+c-Grass) * TILESIZE, TILESIZE, TILESIZE}; break;
+                    source = (Rectangle){i * tileSize, (1+c-Grass) * tileSize, tileSize, tileSize}; break;
                 case Arable:
-                    source = (Rectangle){0 * TILESIZE, 0, TILESIZE, TILESIZE}; break;
+                    source = (Rectangle){0 * tileSize, 0, tileSize, tileSize}; break;
                 case Water:
                 default:
-                    source = (Rectangle){1 * TILESIZE, 0, TILESIZE, TILESIZE}; break;
+                    source = (Rectangle){1 * tileSize, 0, tileSize, tileSize}; break;
             }
             DrawTexturePro(tilesTexture, source, dest, ((Vector2){0, 0}), 0, WHITE);
         }
@@ -493,24 +477,24 @@ int main(void)
                     }
                     if (0 == randomfields) scene = Playing;
                 }
-                viewport = ((Rectangle){WX,WY,windowedScreenWidth,windowedScreenHeight});
+                viewport = ((Rectangle){((screenWidth - windowedScreenWidth) / 2),((screenHeight - windowedScreenHeight) / 2),windowedScreenWidth,windowedScreenHeight});
                 draw_board();
                 sprintf(str, "MOVE YOUR MOUSE!");
                 int strwidth = MeasureText(str, 20);
-                DrawText(str, viewport.x + TILE_ORIGIN_X + viewport.width - strwidth - 73, viewport.y + TILE_ORIGIN_Y + TILESIZE * BOARDROWS + 55, 20, COLOR_FOREGROUND);
+                DrawText(str, viewport.x + tileOriginX + viewport.width - strwidth - 73, viewport.y + tileOriginY + tileSize * BOARDROWS + 55, 20, COLOR_FOREGROUND);
                 if (0 < harvests) sprintf(str, "%d HARVEST%s", harvests, ((harvests==1) ? "" : "S"));
                 else sprintf(str, "LEVEL %d", level);
-                DrawText(str, viewport.x + TILE_ORIGIN_X + 9, viewport.y + TILE_ORIGIN_Y + TILESIZE * BOARDROWS + 55, 20, COLOR_FOREGROUND);
+                DrawText(str, viewport.x + tileOriginX + 9, viewport.y + tileOriginY + tileSize * BOARDROWS + 55, 20, COLOR_FOREGROUND);
             } break;
 
             case Playing:
             {
-                uint8_t row = (mouse.y - WY - TILE_ORIGIN_Y) / TILESIZE;
-                uint8_t col = (mouse.x - WX - TILE_ORIGIN_X) / TILESIZE;
-                uint8_t rowmod = (uint32_t)(mouse.y - WY - TILE_ORIGIN_Y) % TILESIZE;
-                uint8_t colmod = (uint32_t)(mouse.x - WX - TILE_ORIGIN_X) % TILESIZE;
-                uint8_t lbound = (TILESIZE-TILECENTERSIZE)/2;
-                uint8_t ubound = TILECENTERSIZE + lbound - 1;
+                uint8_t row = (mouse.y - ((screenHeight - windowedScreenHeight) / 2) - tileOriginY) / tileSize;
+                uint8_t col = (mouse.x - ((screenWidth - windowedScreenWidth) / 2) - tileOriginX) / tileSize;
+                uint8_t rowmod = (uint32_t)(mouse.y - ((screenHeight - windowedScreenHeight) / 2) - tileOriginY) % tileSize;
+                uint8_t colmod = (uint32_t)(mouse.x - ((screenWidth - windowedScreenWidth) / 2) - tileOriginX) % tileSize;
+                uint8_t lbound = (tileSize-tileActiveSize)/2;
+                uint8_t ubound = tileActiveSize + lbound - 1;
                 uint8_t c = board[row][col];
                 bool validloc = \
                 (
@@ -532,7 +516,7 @@ int main(void)
                     eqharvests = eqharvestsWin;
                     scene = Win;
                 }
-                else if (eqharvests == eqharvestsUnchecked)
+                else if (!equilibrium && (eqharvests == eqharvestsUnchecked))
                 {
                     for (eqharvests=1; eqharvests <= eqharvestsMaxCalculate; eqharvests++)
                     {
@@ -541,32 +525,32 @@ int main(void)
                     }
                     if (!equilibrium) eqharvests = eqharvestsTooHighToCalculate;
                 }
-                viewport = (Rectangle){WX,WY,windowedScreenWidth,windowedScreenHeight};
+                viewport = (Rectangle){((screenWidth - windowedScreenWidth) / 2),((screenHeight - windowedScreenHeight) / 2),windowedScreenWidth,windowedScreenHeight};
                 draw_board();
                 if (eqharvestsMaxCalculate < eqharvests) sprintf(str, "EQUILIBRIUM OVER %d HARVEST%s", eqharvestsMaxCalculate, ((eqharvestsMaxCalculate==1) ? "" : "S"));
                 else sprintf(str, "EQUILIBRIUM IN %d HARVEST%s", eqharvests, ((eqharvests==1) ? "" : "S"));
                 int strwidth = MeasureText(str, 20);
-                DrawText(str, viewport.x + TILE_ORIGIN_X + viewport.width - strwidth - 73, viewport.y + TILE_ORIGIN_Y + TILESIZE * BOARDROWS + 55, 20, COLOR_FOREGROUND);
+                DrawText(str, viewport.x + tileOriginX + viewport.width - strwidth - 73, viewport.y + tileOriginY + tileSize * BOARDROWS + 55, 20, COLOR_FOREGROUND);
                 if (0 < harvests) sprintf(str, "%d HARVEST%s", harvests, ((harvests==1) ? "" : "S"));
                 else sprintf(str, "LEVEL %d", level);
-                DrawText(str, viewport.x + TILE_ORIGIN_X + 9, viewport.y + TILE_ORIGIN_Y + TILESIZE * BOARDROWS + 55, 20, COLOR_FOREGROUND);
+                DrawText(str, viewport.x + tileOriginX + 9, viewport.y + tileOriginY + tileSize * BOARDROWS + 55, 20, COLOR_FOREGROUND);
                 if (validloc && (currentGesture == GESTURE_NONE || currentGesture == GESTURE_DRAG))
                 {
-                    Rectangle dest = {viewport.x + TILE_ORIGIN_X + col * TILESIZE, viewport.y + TILE_ORIGIN_Y + row * TILESIZE, TILESIZE, TILESIZE};
-                    DrawTexturePro(tilesTexture, ((Rectangle){TILE_HOVER_COL * TILESIZE, 0, TILESIZE, TILESIZE}), dest, ((Vector2){0, 0}), 0, WHITE);
+                    Rectangle dest = {viewport.x + tileOriginX + col * tileSize, viewport.y + tileOriginY + row * tileSize, tileSize, tileSize};
+                    DrawTexturePro(tilesTexture, ((Rectangle){tileHoverX * tileSize, 0, tileSize, tileSize}), dest, ((Vector2){0, 0}), 0, WHITE);
                 }
             } break;
 
             case Win:
             {
-                viewport = (Rectangle){WX,WY,windowedScreenWidth,windowedScreenHeight};
+                viewport = (Rectangle){((screenWidth - windowedScreenWidth) / 2),((screenHeight - windowedScreenHeight) / 2),windowedScreenWidth,windowedScreenHeight};
                 draw_board();
                 sprintf(str, "CONGRATULATIONS!");
                 int strwidth = MeasureText(str, 20);
-                DrawText(str, viewport.x + TILE_ORIGIN_X + viewport.width - strwidth - 73, viewport.y + TILE_ORIGIN_Y + TILESIZE * BOARDROWS + 55, 20, COLOR_FOREGROUND);
+                DrawText(str, viewport.x + tileOriginX + viewport.width - strwidth - 73, viewport.y + tileOriginY + tileSize * BOARDROWS + 55, 20, COLOR_FOREGROUND);
                 if (0 < harvests) sprintf(str, "%d HARVEST%s", harvests, ((harvests==1) ? "" : "S"));
                 else sprintf(str, "LEVEL %d", level);
-                DrawText(str, viewport.x + TILE_ORIGIN_X + 9, viewport.y + TILE_ORIGIN_Y + TILESIZE * BOARDROWS + 55, 20, COLOR_FOREGROUND);
+                DrawText(str, viewport.x + tileOriginX + 9, viewport.y + tileOriginY + tileSize * BOARDROWS + 55, 20, COLOR_FOREGROUND);
                 if (currentGesture != lastGesture && currentGesture == GESTURE_TAP)
                 {
                     bool success = load_level(level+1);
@@ -576,7 +560,7 @@ int main(void)
 
             case Thanks:
             {
-                viewport = (Rectangle){WX,WY,windowedScreenWidth,windowedScreenHeight};
+                viewport = (Rectangle){((screenWidth - windowedScreenWidth) / 2),((screenHeight - windowedScreenHeight) / 2),windowedScreenWidth,windowedScreenHeight};
                 sprintf(str, "THANKS FOR PLAYING!");
                 int strwidth = MeasureText(str, 20);
                 DrawText(str, viewport.x + (viewport.width - strwidth) / 2, 100, 20, COLOR_FOREGROUND);

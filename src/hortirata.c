@@ -96,6 +96,7 @@ unsigned ffs(int n)
 */
 
 char str[1024];
+int strwidth;
 uint32_t harvests = 0;
 uint8_t board[BOARDROWS][BOARDCOLUMNS];
 uint8_t eqharvests = 0;
@@ -110,6 +111,10 @@ int currentGesture = GESTURE_NONE;
 int display = 0;
 int fps = 30;
 int lastGesture = GESTURE_NONE;
+Rectangle textboxLevel = {99, 687, 58, 26};
+Rectangle textboxPicks = {235, 687, 58, 26};
+Rectangle tileWinDest = {627, 687, 26, 26};
+Rectangle tileWinSource = {915, 19, 26, 26};
 Rectangle viewport;
 Texture2D backgroundTexture;
 Texture2D tilesTexture;
@@ -337,6 +342,33 @@ void draw_board()
 }
 
 
+void draw_info()
+{
+    sprintf(str, "%d", level);
+    strwidth = MeasureText(str, 20);
+    DrawText(str, viewport.x + textboxLevel.x + (textboxLevel.width - strwidth)/2, viewport.y + textboxLevel.y + ((textboxLevel.height - 14)/2) - 2, 20, COLOR_BACKGROUND);
+    sprintf(str, "%d", harvests);
+    strwidth = MeasureText(str, 20);
+    DrawText(str, viewport.x + textboxPicks.x + (textboxPicks.width - strwidth)/2, viewport.y + textboxPicks.y + ((textboxPicks.height - 14)/2) - 2, 20, COLOR_BACKGROUND);
+    switch (eqharvests)
+    {
+        case eqharvestsWin:
+        {
+            DrawTexturePro(tilesTexture, tileWinSource, ((Rectangle){viewport.x + tileWinDest.x, viewport.y + tileWinDest.y , tileWinDest.width, tileWinDest.height}), ((Vector2){0, 0}), 0, WHITE);
+        }; // fallthrough!
+        case 1:
+        {
+            DrawRectangle(viewport.x + 612, viewport.y + 692, 8, 16, COLOR_FOREGROUND);
+            DrawRectangle(viewport.x + 660, viewport.y + 692, 8, 16, COLOR_FOREGROUND);
+        }; // fallthrough!
+        case 2:
+        {
+            DrawRectangle(viewport.x + 596, viewport.y + 696, 8, 8, COLOR_FOREGROUND);
+            DrawRectangle(viewport.x + 676, viewport.y + 696, 8, 8, COLOR_FOREGROUND);
+        } break;
+    }
+}
+
 int main(void)
     {
     //SetTraceLogLevel(LOG_DEBUG);
@@ -479,12 +511,6 @@ int main(void)
                 }
                 viewport = ((Rectangle){((screenWidth - windowedScreenWidth) / 2),((screenHeight - windowedScreenHeight) / 2),windowedScreenWidth,windowedScreenHeight});
                 draw_board();
-                sprintf(str, "MOVE YOUR MOUSE!");
-                int strwidth = MeasureText(str, 20);
-                DrawText(str, viewport.x + tileOriginX + viewport.width - strwidth - 73, viewport.y + tileOriginY + tileSize * BOARDROWS + 55, 20, COLOR_FOREGROUND);
-                if (0 < harvests) sprintf(str, "%d HARVEST%s", harvests, ((harvests==1) ? "" : "S"));
-                else sprintf(str, "LEVEL %d", level);
-                DrawText(str, viewport.x + tileOriginX + 9, viewport.y + tileOriginY + tileSize * BOARDROWS + 55, 20, COLOR_FOREGROUND);
             } break;
 
             case Playing:
@@ -527,13 +553,7 @@ int main(void)
                 }
                 viewport = (Rectangle){((screenWidth - windowedScreenWidth) / 2),((screenHeight - windowedScreenHeight) / 2),windowedScreenWidth,windowedScreenHeight};
                 draw_board();
-                if (eqharvestsMaxCalculate < eqharvests) sprintf(str, "EQUILIBRIUM OVER %d HARVEST%s", eqharvestsMaxCalculate, ((eqharvestsMaxCalculate==1) ? "" : "S"));
-                else sprintf(str, "EQUILIBRIUM IN %d HARVEST%s", eqharvests, ((eqharvests==1) ? "" : "S"));
-                int strwidth = MeasureText(str, 20);
-                DrawText(str, viewport.x + tileOriginX + viewport.width - strwidth - 73, viewport.y + tileOriginY + tileSize * BOARDROWS + 55, 20, COLOR_FOREGROUND);
-                if (0 < harvests) sprintf(str, "%d HARVEST%s", harvests, ((harvests==1) ? "" : "S"));
-                else sprintf(str, "LEVEL %d", level);
-                DrawText(str, viewport.x + tileOriginX + 9, viewport.y + tileOriginY + tileSize * BOARDROWS + 55, 20, COLOR_FOREGROUND);
+                draw_info();
                 if (validloc && (currentGesture == GESTURE_NONE || currentGesture == GESTURE_DRAG))
                 {
                     Rectangle dest = {viewport.x + tileOriginX + col * tileSize, viewport.y + tileOriginY + row * tileSize, tileSize, tileSize};
@@ -545,12 +565,7 @@ int main(void)
             {
                 viewport = (Rectangle){((screenWidth - windowedScreenWidth) / 2),((screenHeight - windowedScreenHeight) / 2),windowedScreenWidth,windowedScreenHeight};
                 draw_board();
-                sprintf(str, "CONGRATULATIONS!");
-                int strwidth = MeasureText(str, 20);
-                DrawText(str, viewport.x + tileOriginX + viewport.width - strwidth - 73, viewport.y + tileOriginY + tileSize * BOARDROWS + 55, 20, COLOR_FOREGROUND);
-                if (0 < harvests) sprintf(str, "%d HARVEST%s", harvests, ((harvests==1) ? "" : "S"));
-                else sprintf(str, "LEVEL %d", level);
-                DrawText(str, viewport.x + tileOriginX + 9, viewport.y + tileOriginY + tileSize * BOARDROWS + 55, 20, COLOR_FOREGROUND);
+                draw_info();
                 if (currentGesture != lastGesture && currentGesture == GESTURE_TAP)
                 {
                     bool success = load_level(level+1);
@@ -562,7 +577,7 @@ int main(void)
             {
                 viewport = (Rectangle){((screenWidth - windowedScreenWidth) / 2),((screenHeight - windowedScreenHeight) / 2),windowedScreenWidth,windowedScreenHeight};
                 sprintf(str, "THANKS FOR PLAYING!");
-                int strwidth = MeasureText(str, 20);
+                strwidth = MeasureText(str, 20);
                 DrawText(str, viewport.x + (viewport.width - strwidth) / 2, 100, 20, COLOR_FOREGROUND);
             }
         }

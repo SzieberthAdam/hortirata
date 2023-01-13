@@ -1,13 +1,15 @@
 ﻿TODO
 ====
-1. Viewport review & fix
+1. Rename "harvest" term to "pick"
+1. Full screen integer scaling
+1. Eliminate "viewport" term
 1. Optimize solver
 1. Give suggestion
 1. Farm-stead icon
 1. Forest icon
 1. Ensure non-win condition when draw
 1. https://raylibtech.itch.io/rrespacker
-
+1. Do not mess up Windows taskbar once back from fullscreen. Ask Windows to refresh.
 
 Release version features
 ========================

@@ -358,13 +358,18 @@ void draw_info()
         }; // fallthrough!
         case 1:
         {
-            DrawRectangle(viewport.x + 612, viewport.y + 692, 8, 16, COLOR_FOREGROUND);
-            DrawRectangle(viewport.x + 660, viewport.y + 692, 8, 16, COLOR_FOREGROUND);
+            DrawRectangle(viewport.x + 611, viewport.y + 691, 10, 18, COLOR_FOREGROUND);
+            DrawRectangle(viewport.x + 659, viewport.y + 691, 10, 18, COLOR_FOREGROUND);
         }; // fallthrough!
         case 2:
         {
-            DrawRectangle(viewport.x + 596, viewport.y + 696, 8, 8, COLOR_FOREGROUND);
-            DrawRectangle(viewport.x + 676, viewport.y + 696, 8, 8, COLOR_FOREGROUND);
+            DrawRectangle(viewport.x + 595, viewport.y + 695, 10, 10, COLOR_FOREGROUND);
+            DrawRectangle(viewport.x + 675, viewport.y + 695, 10, 10, COLOR_FOREGROUND);
+        }; // fallthrough!
+        case 3:
+        {
+            DrawRectangle(viewport.x + 579, viewport.y + 699, 10, 2, COLOR_FOREGROUND);
+            DrawRectangle(viewport.x + 691, viewport.y + 699, 10, 2, COLOR_FOREGROUND);
         } break;
     }
 }
@@ -526,7 +531,7 @@ int main(void)
                 (
                         (row < BOARDROWS && col < BOARDCOLUMNS)
                         &&
-                        (c-Grass < FIELDTYPECOUNT)
+                        (0 < c-Grass && c-Grass < FIELDTYPECOUNT)
                         &&
                         (lbound <= rowmod && rowmod <= ubound && lbound <= colmod && colmod <= ubound)
                 );

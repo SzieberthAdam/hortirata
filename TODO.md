@@ -2,6 +2,7 @@
 ====
 1. Full screen integer scaling
 1. Eliminate "viewport" term
+1. Minus marks to match plus ones
 1. Optimize solver
 1. Give suggestion
 1. Farm-stead icon

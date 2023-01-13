@@ -49,11 +49,11 @@ enum HortirataScene {
     Thanks = 22
 };
 
-enum eqharvestsSpecialValue {
-    eqharvestsWin = 0,
-    eqharvestsMaxCalculate = 3, // IMPORTANT
-    eqharvestsTooHighToCalculate = 254,
-    eqharvestsUnchecked = 255
+enum eqpicksSpecialValue {
+    eqpicksWin = 0,
+    eqpicksMaxCalculate = 3, // IMPORTANT
+    eqpicksTooHighToCalculate = 254,
+    eqpicksUnchecked = 255
 };
 
 
@@ -97,9 +97,9 @@ unsigned ffs(int n)
 
 char str[1024];
 int strwidth;
-uint32_t harvests = 0;
+uint32_t picks = 0;
 uint8_t board[BOARDROWS][BOARDCOLUMNS];
-uint8_t eqharvests = 0;
+uint8_t eqpicks = 0;
 uint8_t fieldtypecounts[FIELDTYPECOUNT];
 uint8_t fieldtypecounttarget = 0;
 uint8_t gamefields = 0;
@@ -145,8 +145,8 @@ bool load(const char *fileName)
     unsigned int filelength = GetFileLength(fileName);
     if (filelength < BOARDROWS*BOARDCOLUMNS) return false;
     unsigned char* filedata = LoadFileData(fileName, &filelength);
-    harvests = 0;
-    eqharvests = eqharvestsUnchecked;
+    picks = 0;
+    eqpicks = eqpicksUnchecked;
     uint8_t row = 0;
     uint8_t col = 0;
     for (uint8_t v=0; v<FIELDTYPECOUNT; v++) fieldtypecounts[v] = 0;
@@ -280,11 +280,11 @@ bool vcount_in_equilibrium(uint8_t fieldtypecounts[FIELDTYPECOUNT], uint8_t fiel
 }
 
 
-bool simulate(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t fieldtypecounts[FIELDTYPECOUNT], uint8_t fieldtypecounttarget, uint8_t harvests)
+bool simulate(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t fieldtypecounts[FIELDTYPECOUNT], uint8_t fieldtypecounttarget, uint8_t picks)
 {
     uint8_t simboard[BOARDROWS][BOARDCOLUMNS];
     uint8_t simvcount[FIELDTYPECOUNT];
-    if (harvests == 0) return false;
+    if (picks == 0) return false;
     for (uint8_t row=0; row<BOARDROWS; row++)
     {
         for (uint8_t col=0; col<BOARDCOLUMNS; col++)
@@ -301,7 +301,7 @@ bool simulate(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t fieldtypecounts[FI
                     memcpy(&simvcount, fieldtypecounts, FIELDTYPECOUNT);
                     transform(simboard, simvcount, row, col);
                     if (vcount_in_equilibrium(simvcount, fieldtypecounttarget)) return true;
-                    if ((1 < harvests) && simulate(simboard, simvcount, fieldtypecounttarget, harvests-1)) return true;
+                    if ((1 < picks) && simulate(simboard, simvcount, fieldtypecounttarget, picks-1)) return true;
                 } break;
             }
         }
@@ -347,12 +347,12 @@ void draw_info()
     sprintf(str, "%d", level);
     strwidth = MeasureText(str, 20);
     DrawText(str, viewport.x + textboxLevel.x + (textboxLevel.width - strwidth)/2, viewport.y + textboxLevel.y + ((textboxLevel.height - 14)/2) - 2, 20, COLOR_BACKGROUND);
-    sprintf(str, "%d", harvests);
+    sprintf(str, "%d", picks);
     strwidth = MeasureText(str, 20);
     DrawText(str, viewport.x + textboxPicks.x + (textboxPicks.width - strwidth)/2, viewport.y + textboxPicks.y + ((textboxPicks.height - 14)/2) - 2, 20, COLOR_BACKGROUND);
-    switch (eqharvests)
+    switch (eqpicks)
     {
-        case eqharvestsWin:
+        case eqpicksWin:
         {
             DrawTexturePro(tilesTexture, tileWinSource, ((Rectangle){viewport.x + tileWinDest.x, viewport.y + tileWinDest.y , tileWinDest.width, tileWinDest.height}), ((Vector2){0, 0}), 0, WHITE);
         }; // fallthrough!
@@ -533,23 +533,23 @@ int main(void)
                 if (validloc && (currentGesture != lastGesture && currentGesture == GESTURE_TAP))
                 {
                     transform(board, fieldtypecounts, row, col);
-                    harvests++;
-                    eqharvests = eqharvestsUnchecked;
+                    picks++;
+                    eqpicks = eqpicksUnchecked;
                 }
                 bool equilibrium = vcount_in_equilibrium(fieldtypecounts, fieldtypecounttarget);
                 if (equilibrium)
                 {
-                    eqharvests = eqharvestsWin;
+                    eqpicks = eqpicksWin;
                     scene = Win;
                 }
-                else if (!equilibrium && (eqharvests == eqharvestsUnchecked))
+                else if (!equilibrium && (eqpicks == eqpicksUnchecked))
                 {
-                    for (eqharvests=1; eqharvests <= eqharvestsMaxCalculate; eqharvests++)
+                    for (eqpicks=1; eqpicks <= eqpicksMaxCalculate; eqpicks++)
                     {
-                        equilibrium = simulate(board, fieldtypecounts, fieldtypecounttarget, eqharvests);
+                        equilibrium = simulate(board, fieldtypecounts, fieldtypecounttarget, eqpicks);
                         if (equilibrium) break;
                     }
-                    if (!equilibrium) eqharvests = eqharvestsTooHighToCalculate;
+                    if (!equilibrium) eqpicks = eqpicksTooHighToCalculate;
                 }
                 viewport = (Rectangle){((screenWidth - windowedScreenWidth) / 2),((screenHeight - windowedScreenHeight) / 2),windowedScreenWidth,windowedScreenHeight};
                 draw_board();

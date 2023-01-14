@@ -109,21 +109,24 @@ uint8_t scene = NoScene;
 
 int currentGesture = GESTURE_NONE;
 int display = 0;
-int fps = 30;
+int fps = 60;
 int lastGesture = GESTURE_NONE;
+Rectangle gameScreenDest;
 Rectangle textboxLevel = {112, 688, 96, 24};
 Rectangle textboxPicks = {1144, 688, 104, 24};
 Rectangle tileWinDest = {624, 684, 32, 32};
 Rectangle tileWinSource = {912, 16, 32, 32};
-Rectangle viewport;
 Texture2D backgroundTexture;
 Texture2D tilesTexture;
-uint16_t screenHeight = 0;
-uint16_t screenWidth = 0;
 uint16_t tileOriginX = 32;
 uint16_t tileOriginY = 72;
-uint16_t windowedScreenHeight = 0;
-uint16_t windowedScreenWidth = 0;
+uint16_t windowHeight = 0;
+uint16_t windowWidth = 0;
+uint32_t gameScreenHeight = 0;
+uint32_t gameScreenWidth = 0;
+uint32_t screenHeight = 0;
+uint32_t screenWidth = 0;
+uint8_t gameScreenScale;
 uint8_t tileActiveSize = 50;
 uint8_t tileDeficitAvailable = 9;
 uint8_t tileHoverX = 17;
@@ -312,7 +315,7 @@ bool simulate(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t fieldtypecounts[FI
 
 void draw_board()
 {
-    DrawTexture(backgroundTexture, viewport.x, viewport.y, WHITE);
+    DrawTexture(backgroundTexture, 0, 0, WHITE);
     for (uint8_t row=0; row<BOARDROWS; row++)
     {
         for (uint8_t col=0; col<BOARDCOLUMNS; col++)
@@ -320,7 +323,7 @@ void draw_board()
             uint8_t c = board[row][col];
             uint8_t i = (0 < fieldtypecounts[c-Grass]) ? min(tileDeficitAvailable + tileSurplusAvailable, tileDeficitAvailable + fieldtypecounts[c-Grass] - fieldtypecounttarget) : tileDeficitAvailable;
             Rectangle source;
-            Rectangle dest = {viewport.x + tileOriginX + col * tileSize, viewport.y + tileOriginY + row * tileSize, tileSize, tileSize};
+            Rectangle dest = {tileOriginX + col * tileSize, tileOriginY + row * tileSize, tileSize, tileSize};
             switch (c)
             {
                 case Grass:
@@ -338,7 +341,6 @@ void draw_board()
             DrawTexturePro(tilesTexture, source, dest, ((Vector2){0, 0}), 0, WHITE);
         }
     }
-    //DrawRectangleLinesEx(viewport, 1, MAGENTA);
 }
 
 
@@ -346,30 +348,30 @@ void draw_info()
 {
     sprintf(str, "%d", level);
     strwidth = MeasureText(str, 20);
-    DrawText(str, viewport.x + textboxLevel.x + (textboxLevel.width - strwidth)/2, viewport.y + textboxLevel.y + ((textboxLevel.height - 14)/2) - 2, 20, COLOR_BACKGROUND);
+    DrawText(str, textboxLevel.x + (textboxLevel.width - strwidth)/2, textboxLevel.y + ((textboxLevel.height - 14)/2) - 2, 20, COLOR_BACKGROUND);
     sprintf(str, "%d", picks);
     strwidth = MeasureText(str, 20);
-    DrawText(str, viewport.x + textboxPicks.x + (textboxPicks.width - strwidth)/2, viewport.y + textboxPicks.y + ((textboxPicks.height - 14)/2) - 2, 20, COLOR_BACKGROUND);
+    DrawText(str, textboxPicks.x + (textboxPicks.width - strwidth)/2, textboxPicks.y + ((textboxPicks.height - 14)/2) - 2, 20, COLOR_BACKGROUND);
     switch (eqpicks)
     {
         case eqpicksWin:
         {
-            DrawTexturePro(tilesTexture, tileWinSource, ((Rectangle){viewport.x + tileWinDest.x, viewport.y + tileWinDest.y , tileWinDest.width, tileWinDest.height}), ((Vector2){0, 0}), 0, WHITE);
+            DrawTexturePro(tilesTexture, tileWinSource, ((Rectangle){tileWinDest.x, tileWinDest.y , tileWinDest.width, tileWinDest.height}), ((Vector2){0, 0}), 0, WHITE);
         }; // fallthrough!
         case 1:
         {
-            DrawRectangle(viewport.x + 600, viewport.y + 688, 16, 24, COLOR_FOREGROUND);
-            DrawRectangle(viewport.x + 664, viewport.y + 688, 16, 24, COLOR_FOREGROUND);
+            DrawRectangle(600, 688, 16, 24, COLOR_FOREGROUND);
+            DrawRectangle(664, 688, 16, 24, COLOR_FOREGROUND);
         }; // fallthrough!
         case 2:
         {
-            DrawRectangle(viewport.x + 576, viewport.y + 692, 16, 16, COLOR_FOREGROUND);
-            DrawRectangle(viewport.x + 688, viewport.y + 692, 16, 16, COLOR_FOREGROUND);
+            DrawRectangle(576, 692, 16, 16, COLOR_FOREGROUND);
+            DrawRectangle(688, 692, 16, 16, COLOR_FOREGROUND);
         }; // fallthrough!
         case 3:
         {
-            DrawRectangle(viewport.x + 552, viewport.y + 696, 16, 8, COLOR_FOREGROUND);
-            DrawRectangle(viewport.x + 712, viewport.y + 696, 16, 8, COLOR_FOREGROUND);
+            DrawRectangle(552, 696, 16, 8, COLOR_FOREGROUND);
+            DrawRectangle(712, 696, 16, 8, COLOR_FOREGROUND);
         } break;
     }
 }
@@ -380,20 +382,29 @@ int main(void)
 
     load_level(1);
 
-    SetTargetFPS(fps);
-
     sprintf(str, "%s\\%s", GetApplicationDirectory(), "tiles.png");
     Image tiles_image = LoadImage(str);
     sprintf(str, "%s\\%s", GetApplicationDirectory(), "bg.png");
     Image bg_image = LoadImage(str);
 
-    windowedScreenWidth = bg_image.width;
-    windowedScreenHeight = bg_image.height;
-    screenWidth = windowedScreenWidth;
-    screenHeight = windowedScreenHeight;
+    gameScreenWidth = bg_image.width;
+    gameScreenHeight = bg_image.height;
+    screenWidth = gameScreenWidth;
+    screenHeight = gameScreenHeight;
 
-    InitWindow(windowedScreenWidth, windowedScreenHeight, "Hortirata");
+    SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
+    InitWindow(screenWidth, screenHeight, "Hortirata");
+    SetWindowMinSize(gameScreenWidth, gameScreenHeight);
     windowPos = GetWindowPosition();
+    windowWidth = screenWidth;
+    windowHeight = screenHeight;
+
+    // Render texture to draw full screen, enables screen scaling
+    // NOTE: If screen is scaled, mouse input should be scaled proportionally
+    RenderTexture2D screenTarget = LoadRenderTexture(gameScreenWidth, gameScreenHeight);
+    SetTextureFilter(screenTarget.texture, TEXTURE_FILTER_POINT);
+
+    SetTargetFPS(fps);
 
     // call LoadTextureFromImage(); STRICTLY AFTER InitWindow();!
     tilesTexture = LoadTextureFromImage(tiles_image);
@@ -409,23 +420,24 @@ int main(void)
         if (IsKeyPressed(KEY_F10) || ((IsKeyPressed(KEY_ENTER) && (IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT)))))
         {
             // instead of the true fullscreen which would be the following...
-            // if (IsWindowFullscreen()) {ToggleFullscreen(); SetWindowSize(windowedScreenWidth, windowedScreenHeight);}
+            // if (IsWindowFullscreen()) {ToggleFullscreen(); SetWindowSize(windowWidth, windowHeight);}
             // else {SetWindowSize(GetMonitorWidth(display), GetMonitorHeight(display)); ToggleFullscreen();}
 
             // ... I go for fake fullscreen, similar to SDL_WINDOW_FULLSCREEN_DESKTOP.
             if (IsWindowState(FLAG_WINDOW_UNDECORATED))
             {
                 ClearWindowState(FLAG_WINDOW_UNDECORATED);
-                screenWidth = windowedScreenWidth;
-                screenHeight = windowedScreenHeight;
+                screenWidth = windowWidth;
+                screenHeight = windowHeight;
                 SetWindowSize(screenWidth, screenHeight);
                 SetWindowPosition(windowPos.x, windowPos.y);
+                // TODO: force Windows to refresh whole display (RestoreWindow(); fails here)
             }
             else
             {
                 windowPos = GetWindowPosition();
-                windowedScreenWidth = GetScreenWidth();
-                windowedScreenHeight = GetScreenHeight();
+                windowWidth = GetScreenWidth();
+                windowHeight = GetScreenHeight();
                 screenWidth = GetMonitorWidth(display);
                 screenHeight = GetMonitorHeight(display);
                 SetWindowState(FLAG_WINDOW_UNDECORATED);
@@ -436,15 +448,16 @@ int main(void)
 
         screenWidth = GetScreenWidth();
         screenHeight = GetScreenHeight();
+        gameScreenScale = min(screenWidth/gameScreenWidth, screenHeight/gameScreenHeight);
+        gameScreenDest = (Rectangle){((screenWidth - gameScreenWidth*gameScreenScale) / 2), ((screenHeight - gameScreenHeight*gameScreenScale) / 2), (float)screenTarget.texture.width*gameScreenScale, (float)screenTarget.texture.height*gameScreenScale};
 
         mouse = GetTouchPosition(0);
         lastGesture = currentGesture;
         currentGesture = GetGestureDetected();
 
-        BeginDrawing();
+        BeginTextureMode(screenTarget);
 
-        ClearBackground(RAYWHITE);
-        DrawRectangle(0, 0, screenWidth, screenHeight, COLOR_BACKGROUND);
+        ClearBackground(BLACK);
 
         switch (scene)
         {
@@ -514,16 +527,15 @@ int main(void)
                     }
                     if (0 == randomfields) scene = Playing;
                 }
-                viewport = ((Rectangle){((screenWidth - windowedScreenWidth) / 2),((screenHeight - windowedScreenHeight) / 2),windowedScreenWidth,windowedScreenHeight});
                 draw_board();
             } break;
 
             case Playing:
             {
-                uint8_t row = (mouse.y - ((screenHeight - windowedScreenHeight) / 2) - tileOriginY) / tileSize;
-                uint8_t col = (mouse.x - ((screenWidth - windowedScreenWidth) / 2) - tileOriginX) / tileSize;
-                uint8_t rowmod = (uint32_t)(mouse.y - ((screenHeight - windowedScreenHeight) / 2) - tileOriginY) % tileSize;
-                uint8_t colmod = (uint32_t)(mouse.x - ((screenWidth - windowedScreenWidth) / 2) - tileOriginX) % tileSize;
+                uint8_t row = (mouse.y - gameScreenDest.y - tileOriginY * gameScreenScale) / (tileSize * gameScreenScale);
+                uint8_t col = (mouse.x - gameScreenDest.x - tileOriginX * gameScreenScale) / (tileSize * gameScreenScale);
+                uint8_t rowmod = ((uint32_t)(mouse.y - gameScreenDest.y - tileOriginY * gameScreenScale) % (tileSize * gameScreenScale)) / gameScreenScale;
+                uint8_t colmod = ((uint32_t)(mouse.x - gameScreenDest.x - tileOriginX * gameScreenScale) % (tileSize * gameScreenScale)) / gameScreenScale;
                 uint8_t lbound = (tileSize-tileActiveSize)/2;
                 uint8_t ubound = tileActiveSize + lbound - 1;
                 uint8_t c = board[row][col];
@@ -556,19 +568,17 @@ int main(void)
                     }
                     if (!equilibrium) eqpicks = eqpicksTooHighToCalculate;
                 }
-                viewport = (Rectangle){((screenWidth - windowedScreenWidth) / 2),((screenHeight - windowedScreenHeight) / 2),windowedScreenWidth,windowedScreenHeight};
                 draw_board();
                 draw_info();
                 if (validloc && (currentGesture == GESTURE_NONE || currentGesture == GESTURE_DRAG))
                 {
-                    Rectangle dest = {viewport.x + tileOriginX + col * tileSize, viewport.y + tileOriginY + row * tileSize, tileSize, tileSize};
+                    Rectangle dest = {tileOriginX + col * tileSize, tileOriginY + row * tileSize, tileSize, tileSize};
                     DrawTexturePro(tilesTexture, ((Rectangle){tileHoverX * tileSize, 0, tileSize, tileSize}), dest, ((Vector2){0, 0}), 0, WHITE);
                 }
             } break;
 
             case Win:
             {
-                viewport = (Rectangle){((screenWidth - windowedScreenWidth) / 2),((screenHeight - windowedScreenHeight) / 2),windowedScreenWidth,windowedScreenHeight};
                 draw_board();
                 draw_info();
                 if (currentGesture != lastGesture && currentGesture == GESTURE_TAP)
@@ -580,15 +590,19 @@ int main(void)
 
             case Thanks:
             {
-                viewport = (Rectangle){((screenWidth - windowedScreenWidth) / 2),((screenHeight - windowedScreenHeight) / 2),windowedScreenWidth,windowedScreenHeight};
                 sprintf(str, "THANKS FOR PLAYING!");
                 strwidth = MeasureText(str, 20);
-                DrawText(str, viewport.x + (viewport.width - strwidth) / 2, 100, 20, COLOR_FOREGROUND);
+                DrawText(str, (gameScreenWidth - strwidth) / 2, 100, 20, COLOR_FOREGROUND);
             }
         }
 
         DrawFPS(screenWidth-100, 10); // for debug
 
+        EndTextureMode();
+
+        BeginDrawing();
+            ClearBackground(BLACK);
+            DrawTexturePro(screenTarget.texture, (Rectangle){0, 0, (float)screenTarget.texture.width, -(float)screenTarget.texture.height}, gameScreenDest, (Vector2){ 0, 0 }, 0.0f, WHITE);
         EndDrawing();
         //----------------------------------------------------------------------------------
 
@@ -621,9 +635,10 @@ int main(void)
 
     // De-Initialization
     //--------------------------------------------------------------------------------------
-    CloseWindow();        // Close window and OpenGL context
+    UnloadRenderTexture(screenTarget);
     UnloadTexture(backgroundTexture);
     UnloadTexture(tilesTexture);
+    CloseWindow();        // Close window and OpenGL context
     //--------------------------------------------------------------------------------------
 
     return 0;

@@ -109,7 +109,7 @@ uint8_t scene = NoScene;
 
 int currentGesture = GESTURE_NONE;
 int display = 0;
-int fps = 60;
+int fps = 30;
 int lastGesture = GESTURE_NONE;
 Rectangle gameScreenDest;
 Rectangle textboxLevel = {112, 688, 96, 24};
@@ -392,7 +392,7 @@ int main(void)
     screenWidth = gameScreenWidth;
     screenHeight = gameScreenHeight;
 
-    SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
+    //SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_RESIZABLE);
     InitWindow(screenWidth, screenHeight, "Hortirata");
     SetWindowMinSize(gameScreenWidth, gameScreenHeight);
     windowPos = GetWindowPosition();
@@ -596,13 +596,12 @@ int main(void)
             }
         }
 
-        DrawFPS(screenWidth-100, 10); // for debug
-
         EndTextureMode();
 
         BeginDrawing();
             ClearBackground(BLACK);
             DrawTexturePro(screenTarget.texture, (Rectangle){0, 0, (float)screenTarget.texture.width, -(float)screenTarget.texture.height}, gameScreenDest, (Vector2){ 0, 0 }, 0.0f, WHITE);
+            //DrawFPS(screenWidth-100, 10); // for debug
         EndDrawing();
         //----------------------------------------------------------------------------------
 

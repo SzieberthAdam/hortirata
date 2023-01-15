@@ -277,21 +277,6 @@ void transform(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t fieldtypecounts[F
 }
 
 
-int16_t getpickvalue(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t fieldtypecounts[FIELDTYPECOUNT], uint8_t row, uint8_t col)
-{
-    int16_t oldvalue = 0;
-    for (uint8_t v=0; v<FIELDTYPECOUNT; v++) oldvalue += abs((int16_t)fieldtypecounttarget - fieldtypecounts[v]);
-    uint8_t simboard[BOARDROWS][BOARDCOLUMNS];
-    uint8_t simfieldtypecounts[FIELDTYPECOUNT];
-    memcpy(&simboard, board, BOARDROWS*BOARDCOLUMNS);
-    memcpy(&simfieldtypecounts, fieldtypecounts, FIELDTYPECOUNT);
-    transform(simboard, simfieldtypecounts, row, col);
-    int16_t newvalue = 0;
-    for (uint8_t v=0; v<FIELDTYPECOUNT; v++) newvalue += abs((int16_t)fieldtypecounttarget - simfieldtypecounts[v]);
-    return oldvalue - newvalue;
-}
-
-
 bool vcount_in_equilibrium(uint8_t fieldtypecounts[FIELDTYPECOUNT], uint8_t fieldtypecounttarget)
 {
     for (uint8_t v=0; v<FIELDTYPECOUNT; v++) if (fieldtypecounts[v] != fieldtypecounttarget) return false;
@@ -435,31 +420,34 @@ int main(void)
         // check for alt + enter
         if (IsKeyPressed(KEY_F10) || ((IsKeyPressed(KEY_ENTER) && (IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT)))))
         {
+            // TODO: swithc to fake fullscreen once the screen refresh problem got resolved
+            // Note: enabled temporary
             // instead of the true fullscreen which would be the following...
-            // if (IsWindowFullscreen()) {ToggleFullscreen(); SetWindowSize(windowWidth, windowHeight);}
-            // else {SetWindowSize(GetMonitorWidth(display), GetMonitorHeight(display)); ToggleFullscreen();}
+            if (IsWindowFullscreen()) {ToggleFullscreen(); SetWindowSize(windowWidth, windowHeight);}
+            else {SetWindowSize(GetMonitorWidth(display), GetMonitorHeight(display)); ToggleFullscreen();}
 
-            // ... I go for fake fullscreen, similar to SDL_WINDOW_FULLSCREEN_DESKTOP.
-            if (IsWindowState(FLAG_WINDOW_UNDECORATED))
-            {
-                ClearWindowState(FLAG_WINDOW_UNDECORATED);
-                screenWidth = windowWidth;
-                screenHeight = windowHeight;
-                SetWindowSize(screenWidth, screenHeight);
-                SetWindowPosition(windowPos.x, windowPos.y);
-                // TODO: force Windows to refresh whole display (RestoreWindow(); fails here)
-            }
-            else
-            {
-                windowPos = GetWindowPosition();
-                windowWidth = GetScreenWidth();
-                windowHeight = GetScreenHeight();
-                screenWidth = GetMonitorWidth(display);
-                screenHeight = GetMonitorHeight(display);
-                SetWindowState(FLAG_WINDOW_UNDECORATED);
-                SetWindowSize(screenWidth, screenHeight);
-                SetWindowPosition(0, 0);
-            }
+            // TODO: force Windows to refresh whole display (RestoreWindow(); fails here)
+            // Note: I go for classic fullscreen until resolved
+            //// ... I go for fake fullscreen, similar to SDL_WINDOW_FULLSCREEN_DESKTOP.
+            //if (IsWindowState(FLAG_WINDOW_UNDECORATED))
+            //{
+            //    ClearWindowState(FLAG_WINDOW_UNDECORATED);
+            //    screenWidth = windowWidth;
+            //    screenHeight = windowHeight;
+            //    SetWindowSize(screenWidth, screenHeight);
+            //    SetWindowPosition(windowPos.x, windowPos.y);
+            //}
+            //else
+            //{
+            //    windowPos = GetWindowPosition();
+            //    windowWidth = GetScreenWidth();
+            //    windowHeight = GetScreenHeight();
+            //    screenWidth = GetMonitorWidth(display);
+            //    screenHeight = GetMonitorHeight(display);
+            //    SetWindowState(FLAG_WINDOW_UNDECORATED);
+            //    SetWindowSize(screenWidth, screenHeight);
+            //    SetWindowPosition(0, 0);
+            //}
         }
 
         screenWidth = GetScreenWidth();
@@ -586,29 +574,6 @@ int main(void)
                 }
                 draw_board();
                 draw_info();
-//                if ((picks % 5) == 0)
-//                {
-//                    for (uint8_t row=0; row<BOARDROWS; row++)
-//                    {
-//                        for (uint8_t col=0; col<BOARDCOLUMNS; col++)
-//                        {
-//                            uint8_t c = board[row][col];
-//                            bool validloc = \
-//                            (
-//                                    (row < BOARDROWS && col < BOARDCOLUMNS)
-//                                    &&
-//                                    (0 < c-Grass && c-Grass < FIELDTYPECOUNT)
-//                            );
-//                            if (validloc)
-//                            {
-//                                int16_t pickvalue = getpickvalue(board, fieldtypecounts, row, col);
-//                                if (0 < pickvalue) DrawRectangle(tileOriginX + col * tileSize, tileOriginY + row * tileSize, tileSize, tileSize, ((Color){0xFF, 0xFF, 0xFF, 0x80}));
-//                                sprintf(str, "%d", pickvalue);
-//                                DrawText(str, tileOriginX + col * tileSize, tileOriginY + row * tileSize, 10, MAGENTA);
-//                            }
-//                        }
-//                    }
-//                }
                 if (validloc && (currentGesture == GESTURE_NONE || currentGesture == GESTURE_DRAG))
                 {
                     Rectangle dest = {tileOriginX + col * tileSize, tileOriginY + row * tileSize, tileSize, tileSize};

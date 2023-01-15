@@ -1,4 +1,0 @@
-hortirata.c: In function 'main':
-hortirata.c:596:1: warning: multi-line comment [-Wcomment]
-  596 | //                            bool validloc = \
-      | ^

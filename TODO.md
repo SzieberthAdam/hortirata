@@ -1,8 +1,5 @@
 ﻿TODO
 ====
-1. Minus marks to match plus ones
-1. Optimize solver
-1. Give suggestion
 1. Farm-stead icon
 1. Forest icon
 1. Ensure non-win condition when draw

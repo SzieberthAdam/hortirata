@@ -276,6 +276,22 @@ void transform(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t fieldtypecounts[F
     }
 }
 
+
+int16_t getpickvalue(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t fieldtypecounts[FIELDTYPECOUNT], uint8_t row, uint8_t col)
+{
+    int16_t oldvalue = 0;
+    for (uint8_t v=0; v<FIELDTYPECOUNT; v++) oldvalue += abs((int16_t)fieldtypecounttarget - fieldtypecounts[v]);
+    uint8_t simboard[BOARDROWS][BOARDCOLUMNS];
+    uint8_t simfieldtypecounts[FIELDTYPECOUNT];
+    memcpy(&simboard, board, BOARDROWS*BOARDCOLUMNS);
+    memcpy(&simfieldtypecounts, fieldtypecounts, FIELDTYPECOUNT);
+    transform(simboard, simfieldtypecounts, row, col);
+    int16_t newvalue = 0;
+    for (uint8_t v=0; v<FIELDTYPECOUNT; v++) newvalue += abs((int16_t)fieldtypecounttarget - simfieldtypecounts[v]);
+    return oldvalue - newvalue;
+}
+
+
 bool vcount_in_equilibrium(uint8_t fieldtypecounts[FIELDTYPECOUNT], uint8_t fieldtypecounttarget)
 {
     for (uint8_t v=0; v<FIELDTYPECOUNT; v++) if (fieldtypecounts[v] != fieldtypecounttarget) return false;
@@ -286,7 +302,7 @@ bool vcount_in_equilibrium(uint8_t fieldtypecounts[FIELDTYPECOUNT], uint8_t fiel
 bool simulate(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t fieldtypecounts[FIELDTYPECOUNT], uint8_t fieldtypecounttarget, uint8_t picks)
 {
     uint8_t simboard[BOARDROWS][BOARDCOLUMNS];
-    uint8_t simvcount[FIELDTYPECOUNT];
+    uint8_t simfieldtypecounts[FIELDTYPECOUNT];
     if (picks == 0) return false;
     for (uint8_t row=0; row<BOARDROWS; row++)
     {
@@ -301,10 +317,10 @@ bool simulate(uint8_t board[BOARDROWS][BOARDCOLUMNS], uint8_t fieldtypecounts[FI
                 case Seed:
                 {
                     memcpy(&simboard, board, BOARDROWS*BOARDCOLUMNS);
-                    memcpy(&simvcount, fieldtypecounts, FIELDTYPECOUNT);
-                    transform(simboard, simvcount, row, col);
-                    if (vcount_in_equilibrium(simvcount, fieldtypecounttarget)) return true;
-                    if ((1 < picks) && simulate(simboard, simvcount, fieldtypecounttarget, picks-1)) return true;
+                    memcpy(&simfieldtypecounts, fieldtypecounts, FIELDTYPECOUNT);
+                    transform(simboard, simfieldtypecounts, row, col);
+                    if (vcount_in_equilibrium(simfieldtypecounts, fieldtypecounttarget)) return true;
+                    if ((1 < picks) && simulate(simboard, simfieldtypecounts, fieldtypecounttarget, picks-1)) return true;
                 } break;
             }
         }
@@ -570,6 +586,29 @@ int main(void)
                 }
                 draw_board();
                 draw_info();
+//                if ((picks % 5) == 0)
+//                {
+//                    for (uint8_t row=0; row<BOARDROWS; row++)
+//                    {
+//                        for (uint8_t col=0; col<BOARDCOLUMNS; col++)
+//                        {
+//                            uint8_t c = board[row][col];
+//                            bool validloc = \
+//                            (
+//                                    (row < BOARDROWS && col < BOARDCOLUMNS)
+//                                    &&
+//                                    (0 < c-Grass && c-Grass < FIELDTYPECOUNT)
+//                            );
+//                            if (validloc)
+//                            {
+//                                int16_t pickvalue = getpickvalue(board, fieldtypecounts, row, col);
+//                                if (0 < pickvalue) DrawRectangle(tileOriginX + col * tileSize, tileOriginY + row * tileSize, tileSize, tileSize, ((Color){0xFF, 0xFF, 0xFF, 0x80}));
+//                                sprintf(str, "%d", pickvalue);
+//                                DrawText(str, tileOriginX + col * tileSize, tileOriginY + row * tileSize, 10, MAGENTA);
+//                            }
+//                        }
+//                    }
+//                }
                 if (validloc && (currentGesture == GESTURE_NONE || currentGesture == GESTURE_DRAG))
                 {
                     Rectangle dest = {tileOriginX + col * tileSize, tileOriginY + row * tileSize, tileSize, tileSize};

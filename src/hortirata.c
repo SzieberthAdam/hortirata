@@ -29,14 +29,22 @@
 #define COLOR_TITLE YELLOW
 
 
+typedef struct __attribute__((__packed__, __scalar_storage_order__("big-endian"))) {
+    uint8_t x;
+    uint8_t y;
+} Coord;
+
+
 enum HortirataFieldType {
     LF = 0x0A,
     CR = 0x0D,
+    Cursor = 0x11,
     Grass = '0',
     Grain = '1',
     Lettuce = '2',
     Berry = '3',
     Seed = '4',
+    FarmStead = 'F',
     Arable = '_',
     Water = '~',
 };
@@ -107,6 +115,7 @@ uint8_t level = 0;
 uint8_t randomfields = 0;
 uint8_t scene = NoScene;
 
+Coord tileMap[255];
 int currentGesture = GESTURE_NONE;
 int display = 0;
 int fps = 30;
@@ -115,7 +124,7 @@ Rectangle gameScreenDest;
 Rectangle textboxLevel = {112, 688, 96, 24};
 Rectangle textboxPicks = {1144, 688, 104, 24};
 Rectangle tileWinDest = {624, 684, 32, 32};
-Rectangle tileWinSource = {912, 16, 32, 32};
+Rectangle tileWinSource = {1168, 16, 32, 32};
 Texture2D backgroundTexture;
 Texture2D tilesTexture;
 uint16_t tileOriginX = 32;
@@ -129,7 +138,6 @@ uint32_t screenWidth = 0;
 uint8_t gameScreenScale;
 uint8_t tileActiveSize = 50;
 uint8_t tileDeficitAvailable = 9;
-uint8_t tileHoverX = 17;
 uint8_t tileSize = 64;
 uint8_t tileSurplusAvailable = 9;
 Vector2 mouse;
@@ -193,10 +201,9 @@ bool load(const char *fileName)
                 }
                 randomfields++;
             } break;
-            case Water:
             default:
             {
-                board[row][col] = Water;
+                board[row][col] = c;
                 col++;
                 if (BOARDCOLUMNS <= col)
                 {
@@ -322,7 +329,6 @@ void draw_board()
         for (uint8_t col=0; col<BOARDCOLUMNS; col++)
         {
             uint8_t c = board[row][col];
-            uint8_t i = (0 < fieldtypecounts[c-Grass]) ? min(tileDeficitAvailable + tileSurplusAvailable, tileDeficitAvailable + fieldtypecounts[c-Grass] - fieldtypecounttarget) : tileDeficitAvailable;
             Rectangle source;
             Rectangle dest = {tileOriginX + col * tileSize, tileOriginY + row * tileSize, tileSize, tileSize};
             switch (c)
@@ -332,12 +338,12 @@ void draw_board()
                 case Lettuce:
                 case Berry:
                 case Seed:
-                    source = (Rectangle){i * tileSize, (1+c-Grass) * tileSize, tileSize, tileSize}; break;
-                case Arable:
-                    source = (Rectangle){0 * tileSize, 0, tileSize, tileSize}; break;
-                case Water:
+                    {
+                        int8_t m = max(min(tileSurplusAvailable, (fieldtypecounts[c-Grass] - fieldtypecounttarget)), -tileDeficitAvailable);
+                        source = (Rectangle){(tileMap[c].y + m) * tileSize, tileMap[c].x * tileSize, tileSize, tileSize}; break;
+                    } break;
                 default:
-                    source = (Rectangle){1 * tileSize, 0, tileSize, tileSize}; break;
+                    source = (Rectangle){tileMap[c].y * tileSize, tileMap[c].x * tileSize, tileSize, tileSize};
             }
             DrawTexturePro(tilesTexture, source, dest, ((Vector2){0, 0}), 0, WHITE);
         }
@@ -379,7 +385,17 @@ void draw_info()
 
 int main(void)
     {
-    //SetTraceLogLevel(LOG_DEBUG);
+    SetTraceLogLevel(LOG_DEBUG);
+
+    tileMap[Arable] = (Coord){0, 0};
+    tileMap[Water] = (Coord){0, 1};
+    tileMap[FarmStead] = (Coord){0, 2};
+    tileMap[Cursor] = (Coord){0, 17};
+    tileMap[Grass] = (Coord){1, 9};
+    tileMap[Grain] = (Coord){2, 9};
+    tileMap[Lettuce] = (Coord){3, 9};
+    tileMap[Berry] = (Coord){4, 9};
+    tileMap[Seed] = (Coord){5, 9};
 
     load_level(1);
 
@@ -576,8 +592,9 @@ int main(void)
                 draw_info();
                 if (validloc && (currentGesture == GESTURE_NONE || currentGesture == GESTURE_DRAG))
                 {
+                    Rectangle source = (Rectangle){tileMap[Cursor].y * tileSize, tileMap[Cursor].x * tileSize, tileSize, tileSize};
                     Rectangle dest = {tileOriginX + col * tileSize, tileOriginY + row * tileSize, tileSize, tileSize};
-                    DrawTexturePro(tilesTexture, ((Rectangle){tileHoverX * tileSize, 0, tileSize, tileSize}), dest, ((Vector2){0, 0}), 0, WHITE);
+                    DrawTexturePro(tilesTexture, source, dest, ((Vector2){0, 0}), 0, WHITE);
                 }
             } break;
 

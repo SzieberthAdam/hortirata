@@ -47,6 +47,8 @@ enum HortirataFieldType {
     FarmStead = 'F',
     Arable = '_',
     Water = '~',
+    Sand = ':',
+    Oak = 'O',
 };
 
 enum HortirataScene {
@@ -396,6 +398,8 @@ int main(void)
     tileMap[Lettuce] = (Coord){3, 9};
     tileMap[Berry] = (Coord){4, 9};
     tileMap[Seed] = (Coord){5, 9};
+    tileMap[Sand] = (Coord){0, 3};
+    tileMap[Oak] = (Coord){0, 4};
 
     load_level(1);
 

@@ -1,4 +1,12 @@
-﻿Short term
+﻿Post Compo version
+==================
+I intend to release the version of Hortirata I can provide until the end of the rating phase for free.
+
+1. Level name
+1. Tutorial in the form of hints between 
+1. Sound
+
+Short term
 ==========
 1. Ensure non-win condition when draw
 1. More levels / longer campaign
@@ -10,21 +18,12 @@
 
 Mid term
 ========
-1. Animal equilibrium (animals automatically take animal squares based on plant dominance)
-    * Prizes: 
-    * Grazing  4-3-0-0-0
-    * Insects  1-3-2-4-0
-    * Domestic 0-1-4-3-2
-    * Game     2-3-0-4-1
-    * Birds    1-2-0-3-4
-
-
-    * Grazing: 2*grass0 + barn/shed + farm-stead + house
-    * Insects: 2*grain1 + lettuce2 + seed4 + water + greenhouse + house + farm-stead
-    * Domestic: 2*lettuce2 + house + greenhouse + farm-stead
-    * Game: 2*berry3 + forest
-    * Birds: 2*seed4 + berry3 + fruit tree + bushes + water
-1. Sound
+1. Animal equilibrium (animals automatically take animal squares based on plant dominance, no animal if value is equal)
+    * 0: Grazing 
+    * 1: Insects 
+    * 2: Domestic
+    * 3: Game
+    * 4: Birds
 
 * Farm-stead function thinking (currently thinking on it to transform grain to grass and grass to grain)
 * Mill (grain to seed and seed to grain)

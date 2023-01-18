@@ -28,6 +28,7 @@
 #define COLOR_FOREGROUND WHITE
 #define COLOR_TITLE YELLOW
 
+#define MAXLEVELNAMESIZE 32
 
 typedef struct __attribute__((__packed__, __scalar_storage_order__("big-endian"))) {
     uint8_t x;
@@ -105,6 +106,7 @@ unsigned ffs(int n)
 === GLOBAL VARIABLES ===========================================================================================
 */
 
+char levelname[MAXLEVELNAMESIZE];
 char str[1024];
 int strwidth;
 uint32_t picks = 0;
@@ -123,7 +125,7 @@ int display = 0;
 int fps = 30;
 int lastGesture = GESTURE_NONE;
 Rectangle gameScreenDest;
-Rectangle textboxLevel = {112, 688, 96, 24};
+Rectangle textboxLevel = {112, 688, 216, 24};
 Rectangle textboxPicks = {1144, 688, 104, 24};
 Rectangle tileWinDest = {624, 684, 32, 32};
 Rectangle tileWinSource = {1168, 16, 32, 32};
@@ -156,8 +158,16 @@ bool load(const char *fileName)
 {
     if (!FileExists(fileName)) return false;
     unsigned int filelength = GetFileLength(fileName);
-    if (filelength < BOARDROWS*BOARDCOLUMNS) return false;
     unsigned char* filedata = LoadFileData(fileName, &filelength);
+    int ridx = TextFindIndex(filedata, "\r");
+    int nidx = TextFindIndex(filedata, "\n");
+    if (ridx == -1 && nidx == -1) return false;
+    else if (ridx == -1) ridx = nidx;
+    else if (nidx == -1) nidx = ridx;
+    int newlineidx = min(min(ridx, nidx), MAXLEVELNAMESIZE - 1);
+    memcpy(levelname, filedata, newlineidx);
+    levelname[newlineidx] = '\0';
+    uint8_t i = max(ridx, nidx) + 1;
     picks = 0;
     eqpicks = eqpicksUnchecked;
     uint8_t row = 0;
@@ -165,7 +175,7 @@ bool load(const char *fileName)
     for (uint8_t v=0; v<FIELDTYPECOUNT; v++) fieldtypecounts[v] = 0;
     gamefields = 0;
     randomfields = 0;
-    for (uint8_t i=0; i<filelength; ++i)
+    while (i<filelength)
     {
         uint8_t c = filedata[i];
         switch (c)
@@ -215,6 +225,7 @@ bool load(const char *fileName)
             } break;
         }
         if (BOARDROWS <= row) break;
+        i++;
     }
     fieldtypecounttarget = (gamefields + randomfields) / FIELDTYPECOUNT;
     UnloadFileData(filedata);
@@ -356,8 +367,8 @@ void draw_board()
 void draw_info()
 {
     sprintf(str, "%d", level);
-    strwidth = MeasureText(str, 20);
-    DrawText(str, textboxLevel.x + (textboxLevel.width - strwidth)/2, textboxLevel.y + ((textboxLevel.height - 14)/2) - 2, 20, COLOR_BACKGROUND);
+    strwidth = MeasureText(levelname, 20);
+    DrawText(levelname, textboxLevel.x + (textboxLevel.width - strwidth)/2, textboxLevel.y + ((textboxLevel.height - 14)/2) - 2, 20, COLOR_BACKGROUND);
     sprintf(str, "%d", picks);
     strwidth = MeasureText(str, 20);
     DrawText(str, textboxPicks.x + (textboxPicks.width - strwidth)/2, textboxPicks.y + ((textboxPicks.height - 14)/2) - 2, 20, COLOR_BACKGROUND);
@@ -552,6 +563,7 @@ int main(void)
                     if (0 == randomfields) scene = Playing;
                 }
                 draw_board();
+                draw_info();
             } break;
 
             case Playing:

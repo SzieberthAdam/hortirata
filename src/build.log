@@ -1,0 +1,18 @@
+hortirata.c: In function 'load':
+hortirata.c:162:30: warning: pointer targets in passing argument 1 of 'TextFindIndex' differ in signedness [-Wpointer-sign]
+  162 |     int ridx = TextFindIndex(filedata, "\r");
+      |                              ^~~~~~~~
+      |                              |
+      |                              unsigned char *
+In file included from hortirata.c:14:
+C:\raylib\raylib\src/raylib.h:1387:37: note: expected 'const char *' but argument is of type 'unsigned char *'
+ 1387 | RLAPI int TextFindIndex(const char *text, const char *find);                                // Find first text occurrence within a string
+      |                         ~~~~~~~~~~~~^~~~
+hortirata.c:163:30: warning: pointer targets in passing argument 1 of 'TextFindIndex' differ in signedness [-Wpointer-sign]
+  163 |     int nidx = TextFindIndex(filedata, "\n");
+      |                              ^~~~~~~~
+      |                              |
+      |                              unsigned char *
+C:\raylib\raylib\src/raylib.h:1387:37: note: expected 'const char *' but argument is of type 'unsigned char *'
+ 1387 | RLAPI int TextFindIndex(const char *text, const char *find);                                // Find first text occurrence within a string
+      |                         ~~~~~~~~~~~~^~~~
